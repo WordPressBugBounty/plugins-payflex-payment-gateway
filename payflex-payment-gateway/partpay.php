@@ -1,9 +1,11 @@
 <?php
 /*
-Plugin Name: Payflex Payment Gateway
-Description: Use Payflex as a credit card processor for WooCommerce.
-Version: 2.6.1
-Author: Payflex
+ * Plugin Name: Payflex Payment Gateway
+ * Description: Use Payflex as a credit card processor for WooCommerce.
+ * Version: 2.6.2
+ * Author: Payflex
+ * WC requires at least: 6.0
+ * WC tested up to: 9.3.3
 */
 
 
@@ -90,7 +92,7 @@ add_action('template_redirect', function()
             if ($body->orderStatus != "Approved" OR $gateway->get_payflex_workflow_status($order_id) != 'abandoned')
             {
                 $gateway->log('Order ' . $order_id . ' payment cancelled by the customer while on the Payflex checkout pages.');
-                $order->add_order_note(__('Payment cancelled by the customer while on the Payflex checkout pages.', 'woo_partpay'));
+                $order->add_order_note(__('Payment cancelled by the customer while on the Payflex checkout pages.', 'woo_payflex'));
 
                 $gateway->set_payflex_workflow_status($order_id, 'abandoned');
 
@@ -114,6 +116,50 @@ add_action('template_redirect', function()
     }
 });
 
+
+/**
+ * Custom function to declare compatibility with cart_checkout_blocks feature 
+*/
+function declare_cart_checkout_blocks_compatibility() {
+    // Check if the required class exists
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        // Declare compatibility for 'cart_checkout_blocks'
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+    }
+}
+// Hook the custom function to the 'before_woocommerce_init' action
+add_action('before_woocommerce_init', 'declare_cart_checkout_blocks_compatibility');
+
+
+/**
+ * Add block based checkout support assets/payflex-block-checkout.js
+ */
+
+// add_action('enqueue_block_assets', function(){
+//     wp_enqueue_script('payflex-block-checkout', PAYFLEX_PLUGIN_URL . 'assets/payflex-block-checkout.js', array('wp-blocks', 'wp-element', 'wp-editor'), filemtime(PAYFLEX_PLUGIN_DIR . 'assets/payflex-block-checkout.js'));
+// });
+
+// Hook the custom function to the 'woocommerce_blocks_loaded' action
+add_action( 'woocommerce_blocks_loaded', 'oawoo_register_order_approval_payment_method_type' );
+/**
+ * Custom function to register a payment method type
+ */
+function oawoo_register_order_approval_payment_method_type() {
+    // Check if the required class exists
+    if ( ! class_exists( 'Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
+        return;
+    }
+    // Include the custom Blocks Checkout class
+    require_once plugin_dir_path(__FILE__) . 'includes/class-payflex-woocommerce-block-checkout.php';
+    // Hook the registration function to the 'woocommerce_blocks_payment_method_type_registration' action
+    add_action(
+        'woocommerce_blocks_payment_method_type_registration',
+        function( Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry ) {
+            // Register an instance of WC_payflex_Blocks
+            $payment_method_registry->register( new WC_Payflex_Blocks );
+        }
+    );
+}
 
 /**
  * Call the cron task related methods in the gateway
@@ -197,7 +243,7 @@ add_filter('cron_schedules', function ($schedules)
 {
     $schedules['twominutes'] = array(
         'interval' => 120, // seconds
-        'display'  => __('Every 2 minutes', 'woo_partpay')
+        'display'  => __('Every 2 minutes', 'woo_payflex')
     );
     return $schedules;
 });
@@ -227,9 +273,55 @@ function widget_shortcode_content()
         return woo_payflex_frontend_widget();
     }
 }
+
 add_shortcode('payflex_widget', 'widget_shortcode_content');
 
-function woo_payflex_frontend_widget()
+
+function woo_payflex_frontend_widget($amount = false)
+{
+    global $product;
+    if(!$product) return;
+
+    $payflex_settings = get_option('woocommerce_payflex_settings');
+
+    if ($product->get_type() === 'subscription') return;
+
+    if(!$amount){
+
+        $amount = wc_get_price_including_tax($product);
+    }
+    $amount_string = '&amount='.$amount;
+
+    # Defaults
+    $all_options        = '';
+    $merchant_reference = false;
+    $theme              = '';
+    $widget_style       = '';
+    $pay_type           = '';
+
+    if(isset($payflex_settings['widget_style']) AND $payflex_settings['widget_style'])
+        $widget_style = '&logo_type='.$payflex_settings['widget_style'];
+
+    if(isset($payflex_settings['widget_theme']) AND $payflex_settings['widget_theme'])
+        $theme = '&theme='.$payflex_settings['widget_theme'];
+
+    if(isset($payflex_settings['pay_type']) AND $payflex_settings['pay_type'])
+        $pay_type = '&pay_type='.$payflex_settings['pay_type'];
+
+    if(isset($payflex_settings['merchant_widget_reference']) AND $payflex_settings['merchant_widget_reference'])
+        # Make sure the merchant reference is set and is url freindly
+        $merchant_reference = preg_replace('/[^a-zA-Z0-9_]/', '', $payflex_settings['merchant_widget_reference']);
+
+    $all_options = $amount_string.$widget_style.$theme.$pay_type;
+    
+    if($merchant_reference){
+        return '<script async src="https://widgets.payflex.co.za/'.$merchant_reference.'/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script>';
+    }
+    return '<script async src="https://widgets.payflex.co.za/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script>';
+}
+
+
+function woo_payflex_frontend_widget_old()
 {		
     // Early exit if frontend is disabled in settings:
     $payflex_settings = get_option('woocommerce_payflex_settings');
@@ -239,7 +331,7 @@ function woo_payflex_frontend_widget()
     global $product;
     if(!$product){ return; }
     // Early exit if product is a WooCommerce Subscription type product: This throws a linting error, but it is correct.
-    if (class_exists('WC_Subscriptions_Product') && WC_Subscriptions_Product::is_subscription($product)){
+    if ($product->get_type() === 'subscription'){
         return;
     }
     // Early exit if product has no price:
@@ -357,3 +449,80 @@ function woo_payflex_frontend_widget()
 
 // Register support page. This needs to be outside the class otherwise it won't be called soon enough
 add_action('admin_menu', ['WC_Gateway_PartPay', 'register_support_page']);
+
+
+
+
+// Payflex JS payflexBlockVars
+function payflex_block_vars() {
+    $payflex_block_vars = [
+        'pluginUrl' => PAYFLEX_PLUGIN_URL,
+        'payflex_widget' => woo_payflex_frontend_widget(),
+    ];
+    wp_localize_script('payflex-widget-block', 'payflexBlockVars', $payflex_block_vars);
+}
+add_action('enqueue_block_editor_assets', 'payflex_block_vars');
+
+
+
+// Register the block
+function register_payflex_widget_block() {
+    wp_register_script(
+        'payflex-widget-block',
+        plugins_url('assets/block.js', __FILE__),
+        array('wp-blocks', 'wp-element', 'wp-editor'),
+        filemtime(plugin_dir_path(__FILE__) . 'assets/block.js')
+    );
+
+    register_block_type('payflex/widget', array(
+        'editor_script' => 'payflex-widget-block',
+        'render_callback' => 'render_payflex_widget_block',
+    ));
+}
+add_action('init', 'register_payflex_widget_block');
+
+// Render the block
+function render_payflex_widget_block($attributes) {
+    ob_start();
+    // If were in the page builder, just show an image, if were rendering the block on the front end, show the widget
+    if (is_admin()) {
+        echo '<img src="' . plugins_url('assets/widget-icon.png', __FILE__) . '" alt="Payflex Widget" />';
+    } else {
+        echo woo_payflex_frontend_widget();
+    }
+    return ob_get_clean();
+}
+
+
+// Variation price update
+add_action( 'woocommerce_after_single_product', 'payflex_update_price_on_variation' );
+function payflex_update_price_on_variation() {
+    global $product;
+
+    if(!$product){ return; }
+    if ($product->is_type('variable')) {
+        ?>
+        <script>
+            // We need to get the price from ".woocommerce-variation-price .price" after the dropdown has changed it, not before
+            jQuery('input.variation_id').change(function() {
+                var price = jQuery('.woocommerce-variation-price .price').text();
+
+                // Remove anything that's not a number, this is to prevent any issues with currency symbols or commas
+                price = price.replace(/[^0-9]/g, '');
+
+                // Re-add cent separator using a dot 2 spaces from the end.
+                price = price.slice(0, -2) + '.' + price.slice(-2);
+
+                // Make sure we have a valid whole number above 0
+                if(isNaN(price) || price < 0 ) return;
+
+                // Make sure PayflexWidget is defined
+                if(typeof PayflexWidget !== 'undefined')
+                {     
+                    PayflexWidget.update(price);
+                }
+            });
+        </script>
+        <?php
+    }
+}
