@@ -4,7 +4,7 @@ Tags: credit card,debit card, payflex, payment request, woocommerce
 Requires at least: 4.4
 Tested up to: 6.6.2
 Requires PHP: 7.4
-Stable tag: 2.6.2
+Stable tag: 2.6.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -110,3 +110,5 @@ That’s our problem. You get 100% of the purchase amount (less the Payflex fee)
      * Updates to support page to provide more information
      * Added reset on save for client details to force refreshing of auth token
      * Added block based checkout support
+= 2.6.3 =
+     * Added WooCommerce HPOS compatibilty flag

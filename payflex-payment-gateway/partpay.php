@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Payflex Payment Gateway
  * Description: Use Payflex as a credit card processor for WooCommerce.
- * Version: 2.6.2
+ * Version: 2.6.3
  * Author: Payflex
  * WC requires at least: 6.0
  * WC tested up to: 9.3.3
@@ -526,3 +526,13 @@ function payflex_update_price_on_variation() {
         <?php
     }
 }
+
+/**
+ * All functions related to Woocommerce orders are handled through Woocommerce hooks, meaning we support Woocommerces HPOS and Custom Order Tables.
+ * We just need to declare compatibility with the custom order tables feature.
+ */
+add_action('before_woocommerce_init', function(){
+    if ( !class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) return;
+
+    \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+});
