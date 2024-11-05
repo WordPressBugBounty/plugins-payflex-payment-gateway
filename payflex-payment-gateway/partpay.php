@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Payflex Payment Gateway
  * Description: Use Payflex as a credit card processor for WooCommerce.
- * Version: 2.6.3
+ * Version: 2.6.4
  * Author: Payflex
  * WC requires at least: 6.0
  * WC tested up to: 9.3.3
@@ -295,162 +295,53 @@ function woo_payflex_frontend_widget($amount = false)
     # Defaults
     $all_options        = '';
     $merchant_reference = false;
+    $theme_div          = '';
     $theme              = '';
+    $widget_style_div   = '';
     $widget_style       = '';
+    $pay_type_div       = '';
     $pay_type           = '';
 
     if(isset($payflex_settings['widget_style']) AND $payflex_settings['widget_style'])
-        $widget_style = '&logo_type='.$payflex_settings['widget_style'];
+    {
+        $payflex_settings['widget_style'] = sanitize_text_field($payflex_settings['widget_style']);
+
+        $widget_style_div = 'data-widget-style="'.$payflex_settings['widget_style'].'" ';
+        $widget_style     = '&logo_type='.$payflex_settings['widget_style'];
+    }
 
     if(isset($payflex_settings['widget_theme']) AND $payflex_settings['widget_theme'])
-        $theme = '&theme='.$payflex_settings['widget_theme'];
+    {
+        $payflex_settings['widget_theme'] = sanitize_text_field($payflex_settings['widget_theme']);
+
+        $theme_div = 'data-theme="'.$payflex_settings['widget_theme'].'" ';
+        $theme     = '&theme='.$payflex_settings['widget_theme'];
+    }
+
 
     if(isset($payflex_settings['pay_type']) AND $payflex_settings['pay_type'])
-        $pay_type = '&pay_type='.$payflex_settings['pay_type'];
+    {
+        $payflex_settings['pay_type'] = sanitize_text_field($payflex_settings['pay_type']);
+
+        $pay_type_div = 'data-pay_type="'.$payflex_settings['pay_type'].'" ';
+        $pay_type     = '&pay_type='.$payflex_settings['pay_type'];
+    }
 
     if(isset($payflex_settings['merchant_widget_reference']) AND $payflex_settings['merchant_widget_reference'])
         # Make sure the merchant reference is set and is url freindly
         $merchant_reference = preg_replace('/[^a-zA-Z0-9_]/', '', $payflex_settings['merchant_widget_reference']);
 
     $all_options = $amount_string.$widget_style.$theme.$pay_type;
+    $all_div_options = $widget_style_div.$theme_div.$pay_type_div;
     
     if($merchant_reference){
-        return '<script async src="https://widgets.payflex.co.za/'.$merchant_reference.'/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script>';
+        return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/'.$merchant_reference.'/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
     }
-    return '<script async src="https://widgets.payflex.co.za/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script>';
+    return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
 }
-
-
-function woo_payflex_frontend_widget_old()
-{		
-    // Early exit if frontend is disabled in settings:
-    $payflex_settings = get_option('woocommerce_payflex_settings');
-    $payflex_frontend = $payflex_settings['enable_product_widget'];
-    $payflex_frontend_page_builder = $payflex_settings['is_using_page_builder'];
-    if ($payflex_frontend == 'no' && $payflex_frontend_page_builder == 'no'){ return; }   
-    global $product;
-    if(!$product){ return; }
-    // Early exit if product is a WooCommerce Subscription type product: This throws a linting error, but it is correct.
-    if ($product->get_type() === 'subscription'){
-        return;
-    }
-    // Early exit if product has no price:
-    $noprice =  wc_get_price_including_tax($product);
-    if (!$noprice){  return; }
-    // $payflexprice = wc_get_price_including_tax($product);
-    // $payflexnowprice = wc_get_price_including_tax( $product ); 
-    //Variable product data saved for updating amount when selection is made
-    $variations_data = [];
-    if ($product->is_type('variable')) {
-        foreach ($product->get_available_variations() as $variation) {
-            $varprice = ($variation['display_price'] * 100 / 4) / 100;
-            $variations_data[$variation['variation_id']]['amount'] = $variation['display_price'];
-            $variations_data[$variation['variation_id']]['installment'] = $varprice;
-        }
-    }
-    ?>
-    <script>
-        jQuery(function($) {
-            var product_type = '<?php echo $product->is_type('variable');?>';
-            if(product_type == ''){
-                var installmentValule = getInstallmentAmount(<?php echo $noprice;?>);
-                textBasedOnAmount('<?php echo $noprice;?>',installmentValule); 
-            }
-            $('.partPayCalculatorWidget1').on('click', function(ev) {
-                    ev.preventDefault();
-                    var $body = $('body');
-                    var $dialog = $('#partPayCalculatorWidgetDialog').show();
-                    $body.addClass("partPayWidgetDialogVisible");
-                    var $button = $dialog
-                        .find("#partPayCalculatorWidgetDialogClose")
-                        .on('click', function(e) {
-                            e.preventDefault();
-                            $dialog.hide();
-                            $body.removeClass("partPayWidgetDialogVisible");
-                            // Put back on the widget.
-                            $('#partPayCalculatorWidgetDialog').append($dialog);
-                        });
-                    // Move to the body element.
-                    $body.append($dialog);
-                    $body.animate({ scrollTop: 0 }, 'fast');
-            });
-            var jsonData = <?php echo json_encode($variations_data); ?> ,
-            inputVID = 'input.variation_id';
-            $('input.variation_id').change(function() {  
-                if ('' != $(inputVID).val()) {
-                    var vid = $(inputVID).val(),
-                        installmentPayflex = '',
-                        amountPayflex = '';
-                    $.each(jsonData, function(index, data) {
-                        if (index == vid) {
-                            installmentPayflex = data['installment'];
-                            amountPayflex = data['amount'];
-                        }
-                    });
-                    
-                    textBasedOnAmount(amountPayflex,installmentPayflex);
-                }
-            });
-            function getInstallmentAmount(value) {  
-                value = + value;
-                if(isNaN(value) || value < 0 ) {
-                    return 0;
-                }
-                var result = Math.floor(value * 100 / 4) / 100;
-                return endsWithZeroCents(result) ? result.toFixed(0) : result.toFixed(2);
-            }
-            function textBasedOnAmount(amount,installmentAmount) {
-                var rangeMin = <?php echo $payflex_settings['partpay-amount-minimum'];?>,
-                    rangeMax = <?php echo $payflex_settings['partpay-amount-maximum'];?>;
-                if(rangeMin < 10 || rangeMax < 25 || rangeMax > 2000001 ) {  
-                    rangeMin = 50;
-                    rangeMax = 20000;
-                } else if (rangeMax < rangeMin) {
-                    var x = rangeMax;
-                    rangeMax = rangeMin;
-                    rangeMin = x;
-                }
-                var installmentAmount = getInstallmentAmount(amount);
-                var html = '';
-                if (amount > 10000) {
-                    // if heavy basket
-                    html = '';
-                    $('.paypercentage').html('');
-                    $('#heavybasketnote').html('* Higher first payment may apply on large purchases')
-                    $('.heavyBasketText').html("Payflex lets you get what you need now, but pay for it over four interest-free instalments. " +
-                        "You pay a larger amount upfront with the remainder spread across three payments over the following six weeks.");
-                }else{
-                    $('#heavybasketnote').html('');
-                }
-                if (amount < rangeMin) {
-                    html = 'of 25% on orders over <br> R' + rangeMin;
-                } else if (amount > rangeMax) {
-                    html = 'of 25% on orders  R' + rangeMin + ' - R' + rangeMax;
-                } else if(amount < 10001) {
-                    html = 'of <span>R' + installmentAmount + '</span>';
-                }
-                $('.partPayCalculatorWidgetTextFromCopy').html(html);
-            }
-            function endsWithZeroCents(value) {
-                value = Number(value); 
-                var fixed = value.toFixed(2);
-                var endsWith = fixed.lastIndexOf(".00") != -1;
-                return endsWith ;
-            }
-        });   
-    </script>
-    <?php
-    
-    $css = '/* Widget */ @font-face { font-family: \'Montserrat\'; font-style: normal; font-weight: 400; src: local(\'Montserrat Regular\'), local(\'Montserrat-Regular\'), url(https://fonts.gstatic.com/s/montserrat/v13/JTUSjIg1_i6t8kCHKm459Wlhzg.ttf) format(\'truetype\'); } @font-face { font-family: \'Montserrat\'; font-style: normal; font-weight: 500; src: local(\'Montserrat Medium\'), local(\'Montserrat-Medium\'), url(https://fonts.gstatic.com/s/montserrat/v13/JTURjIg1_i6t8kCHKm45_ZpC3gnD-w.ttf) format(\'truetype\'); } @font-face { font-family: \'Montserrat\'; font-style: normal; font-weight: 700; src: local(\'Montserrat Bold\'), local(\'Montserrat-Bold\'), url(https://fonts.gstatic.com/s/montserrat/v13/JTURjIg1_i6t8kCHKm45_dJE3gnD-w.ttf) format(\'truetype\'); } body.partPayWidgetDialogVisible { overflow: hidden; } .partPayCalculatorWidgetDialogHeadingLogo {padding:10px} .partPayCalculatorWidget1 { margin: 0; padding: 2px; background-color: #FFFFFF; /*background-image: url(\'Payflex_Widget_BG.png\');*/ color: #002751;; cursor: pointer; text-transform: none; -webkit-border-radius: 10px; -moz-border-radius: 10px; border-radius: 10px; position: relative; margin-bottom: 10px} .partPayCalculatorWidgetDialogHeadingLogo img{ background-color : #c8a6fa;padding:10px;border-radius:100px} .partPayCalculatorWidget1 #freetext { font-weight: bold; color: #002751; } .partPayCalculatorWidget1 #partPayCalculatorWidgetLogo {width: 125px; top: 0;bottom: 0; margin: auto 0; right: 0; position: absolute; background-color: transparent; } .partPayCalculatorWidget1 #partPayCalculatorWidgetText { font-size: 15px; width: 60%; position: relative; top: 0; bottom: 0; margin: auto 0px } .partPayCalculatorWidget1 #partPayCalculatorWidgetText .partPayCalculatorWidgetTextFromCopy > span { font-weight: bold; } .partPayCalculatorWidget1 #partPayCalculatorWidgetText #partPayCalculatorWidgetLearn { text-decoration: underline; font-size: 12px; font-style: normal; color: #0086EF; } .partPayCalculatorWidget1 #partPayCalculatorWidgetText #partPayCalculatorWidgetSlogen { font-size: 12px; font-style: normal; } #partPayCalculatorWidgetDialog { box-sizing: border-box; } #partPayCalculatorWidgetDialog *, #partPayCalculatorWidgetDialog *:before, #partPayCalculatorWidgetDialog *:after { box-sizing: inherit; } #partPayCalculatorWidgetDialog { z-index: 999999; font-family: \'Arial\', \'Helvetica\'; font-size: 14px; display: none; color: #002751; position: fixed; bottom: 0; left: 0; right: 0; top: 0; } .partPayCalculatorWidgetDialogOuter { background-color: rgba(0, 0, 0, 0.2); height: 100%; left: 0; position: absolute; text-align: center; top: 0; vertical-align: middle; width: 100%; z-index: 999999; overflow-x: hidden; overflow-y: auto; } .partPayCalculatorWidgetDialogInner { background-color: white; border: solid 1px rgba(0, 0, 0, 0.2); -webkit-box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); max-width: 900px; margin: auto; position: relative; font-family: "Montserrat", sans-serif; margin: 30px auto; -webkit-border-radius: 30px; -moz-border-radius: 30px; border-radius: 30px; } .partPayCalculatorWidgetDialogInner #partPayCalculatorWidgetDialogClose { position: absolute; margin-right: 8px; margin-top: 8px; cursor: pointer; max-height: 28px; max-width: 28px; right: 0; top: 0; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading { padding: 50px; display: flex; /*border-bottom: dotted 1px #CECFD1;*/ padding-bottom: 24px; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingLogo { /*width: 300px; height: 64px; max-width: 300px; max-height: 64px; padding-top: 10px; flex: 1;background-color:#c8a6fa;border-radius:100px;  */} .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingLogo img { /*max-width: 300px; max-height: 64px;*/   display: inline-block; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingTitle { font-size: 32px; text-align: left; flex: 1; margin-left: 2rem; font-style: italic; color: #002751; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorksTitle { padding: 10px 50px 0 50px; font-size: 28px; padding-top: 20px; text-align: left; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorksDesc { padding: 10px 50px 0 50px; font-size: 17px; text-align: left; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorks { display: flex; justify-content: space-between; padding: 30px 50px 0 50px; } @media (max-width: 768px) { .partPayCalculatorWidget1{min-height:100px; } #partPayCalculatorWidgetLogo{float:left !important;top:0 !important;margin-top:8px;padding-bottom:15px;} .partPayCalculatorWidgetDialogHeadingLogo{padding:0}  #partPayCalculatorWidgetText {clear:both} .partPayCalculatorWidget1{width:100%} .partPayCalculatorWidgetDialogHeadingTitle{margin-top:40px;} .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorks { flex-direction: column; } } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorks .partPayCalculatorWidgetDialogHowItWorksBody { flex: 1; display: block; padding-top: 20px; /*padding-bottom: 20px;*/ } .nuumberingarea{margin:0 0 10px;padding:0;float:left;width:100%;text-align:center}.nuumberingarea strong{margin:0;padding:15px 0;width:100px;float:none;display:inline-block;border:none;border-radius:100%;font-size:50px;font-weight:700;color:#002751;background-color:#c8a6fa}.partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorks .partPayCalculatorWidgetDialogHowItWorksBody div img { max-width: 120px; max-height: 120px; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHowItWorks .partPayCalculatorWidgetDialogHowItWorksBody p { display: block; font-size: 15px; padding: 5px 15px; color: #002751; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter { /*background-color: #E5E5E6;*/ margin-top: 20px; border-top: solid 2px #002751; padding-bottom: 25px; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterTitle { width: 100%; font-size: 15px; font-weight: 500; padding: 10px 0 0 15px; text-align: left; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterBody { display: block; padding-top: 20px; /* padding-left: 50px; padding-right: 50px;*/ } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterBody > ul { padding: 0; width: 100%; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterBody > ul > li { display: inline-block; padding: 0 34px 0 30px; margin-left: 3px; margin-bottom: 13px; text-align: left; list-style: none; background-repeat: no-repeat; background-image: url(https://widgets.payflex.co.za/assets/tick.png); background-position: left center; background-size : 25px } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterLinks { padding-top: 10px; font-size: 15px; font-style: italic; color: #002751; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterLinks a { text-decoration: underline; color: #002751; } @media only screen and (max-width: 915px) { .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading { display: block; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingLogo { padding-top: 0; width: 100%; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingLogo img { max-width: 100%; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogHeading .partPayCalculatorWidgetDialogHeadingTitle { margin-left: 0; font-size: 24px; } } @media only screen and (max-width: 710px) { .partPayCalculatorWidgetDialogInner { max-width: 350px; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter { display: block; width: 100%; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterBody > ul { width: 100%; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterBody > ul > li { display: block; } .partPayCalculatorWidgetDialogInner .partPayCalculatorWidgetDialogFooter .partPayCalculatorWidgetDialogFooterLinks { padding-top: 10px; font-size: 10px; } } /* iPhone 5 in portrait & landscape: */ /* iPhone 5 in portrait: */ /* iPhone 5 in landscape: */ /* Explicit */';
-    echo '<style type="text/css">' . $css . '</style>';
-    return '<div class="partPayCalculatorWidget1"><div id="partPayCalculatorWidgetText">Or split into 4x <span id="freetext">interest-free</span> payments  <span class="partPayCalculatorWidgetTextFromCopy"></span> <span id="partPayCalculatorWidgetLearn">Learn&nbsp;more</span></div><img id="partPayCalculatorWidgetLogo" src="https://widgets.payflex.co.za/assets/partpay_new.png"><div id="partPayCalculatorWidgetDialog" role="dialog"><div class="partPayCalculatorWidgetDialogOuter"><div class="partPayCalculatorWidgetDialogInner"><img id="partPayCalculatorWidgetDialogClose" src="https://widgets.payflex.co.za/assets/cancel-icon.png" alt="Close"><div class="partPayCalculatorWidgetDialogHeading"><div class="partPayCalculatorWidgetDialogHeadingLogo"><img src="https://widgets.payflex.co.za/assets/Payflex_purple.png"></div><div class="partPayCalculatorWidgetDialogHeadingTitle"><div>No interest, no fees,</div><div>4x instalments over 6 weeks</div></div></div><div class="partPayCalculatorWidgetDialogHowItWorksTitle">How it works</div><div class="partPayCalculatorWidgetDialogHowItWorksDesc"><span class="heavyBasketText">Payflex lets you get what you need now, but pay for it over four interest-free instalments. You pay 25% upfront, then three payments of 25% over the following six weeks.</div></span><div class="partPayCalculatorWidgetDialogHowItWorks"><div class="partPayCalculatorWidgetDialogHowItWorksBody"><div><div class="nuumberingarea"><strong>1</strong></div></div><p>Shop Online<br>and fill your cart</p></div><div class="partPayCalculatorWidgetDialogHowItWorksBody"><div><div class="nuumberingarea"><strong>2</strong></div></div><p>Choose Payflex at checkout</p></div><div class="partPayCalculatorWidgetDialogHowItWorksBody"><div><div class="nuumberingarea"><strong>3</strong></div></div><p>Get approved and <br> pay <span class="paypercentage">25% </span>today <br> with your debit <br> or credit card </p><div id="heavybasketnote" style="font-size:13px"></div></div><div class="partPayCalculatorWidgetDialogHowItWorksBody"><div><div class="nuumberingarea"><strong>4</strong></div></div><p>Pay the remainder <br> over 6-weeks.<br> No interest. <br> No fees.</p></div></div><br style="border-bottom: dotted 1px #CECFD1"><div class="partPayCalculatorWidgetDialogFooter"><div class="partPayCalculatorWidgetDialogFooterBody"><ul><li>You must be over<br>18 years old</li><li>You must have a valid<br>South African ID</li><li>You must have a debit or credit card<br>issued by Mastercard, Visa or Amex </li></ul></div><div class="partPayCalculatorWidgetDialogFooterLinks">Still want more information? <a href="http://www.payflex.co.za/#howitworks/" target="_blank">Click here</a></div></div></div></div></div></div>';
-}
-
 
 // Register support page. This needs to be outside the class otherwise it won't be called soon enough
 add_action('admin_menu', ['WC_Gateway_PartPay', 'register_support_page']);
-
-
 
 
 // Payflex JS payflexBlockVars
@@ -500,31 +391,42 @@ function payflex_update_price_on_variation() {
     global $product;
 
     if(!$product){ return; }
-    if ($product->is_type('variable')) {
+
         ?>
         <script>
-            // We need to get the price from ".woocommerce-variation-price .price" after the dropdown has changed it, not before
-            jQuery('input.variation_id').change(function() {
-                var price = jQuery('.woocommerce-variation-price .price').text();
-
-                // Remove anything that's not a number, this is to prevent any issues with currency symbols or commas
+            // Function to get the price
+            function getWooCommercePrice() {
+                // woocommerce-Price-amount amount
+                var price = jQuery('.woocommerce-Price-amount.amount').first().text();
                 price = price.replace(/[^0-9]/g, '');
-
-                // Re-add cent separator using a dot 2 spaces from the end.
                 price = price.slice(0, -2) + '.' + price.slice(-2);
+                return price;
+            }
 
-                // Make sure we have a valid whole number above 0
-                if(isNaN(price) || price < 0 ) return;
+            // Listen for changes in the price (useful for variable products)
+            jQuery(document).on('found_variation', function(event, variation) {
+                // Make sure the display price has two decimal places
+                var price = variation.display_price;
+                price = price.toFixed(2);
 
-                // Make sure PayflexWidget is defined
-                if(typeof PayflexWidget !== 'undefined')
-                {     
-                    PayflexWidget.update(price);
-                }
+                var pay_type = jQuery('.payflexCalculatorWidgetContainer').data('pay_type');
+
+                PayflexWidget.update(price, pay_type);
+                // console.log('Payflex price updated: ' + price);
             });
+
+            // Listen for changes in the price (useful for simple products)
+            jQuery(document).on('updated_wc_div', function() { // Can be trigged with jQuery( document.body ).trigger( 'updated_wc_div' );
+                var price = getWooCommercePrice();
+                var pay_type = jQuery('.payflexCalculatorWidgetContainer').data('pay_type');
+
+                PayflexWidget.update(price, pay_type);
+                // console.log('Payflex price updated: ' + price);
+            });
+
         </script>
         <?php
-    }
+
 }
 
 /**
