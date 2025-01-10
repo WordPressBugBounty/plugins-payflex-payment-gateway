@@ -1,9 +1,10 @@
 <?php
 /*
  * Plugin Name: Payflex Payment Gateway
- * Description: Use Payflex as a credit card processor for WooCommerce.
+ * Description: Payflex payment gateway plugin for WooCommerce. Supports pay now as well as buy now pay later.
  * Version: 2.6.4
  * Author: Payflex
+ * Author URI: https://payflex.co.za/
  * WC requires at least: 6.0
  * WC tested up to: 9.3.3
 */
@@ -255,7 +256,7 @@ function widget_content()
 {
     $payflex_settings = get_option('woocommerce_payflex_settings');
     if($payflex_settings['enable_product_widget'] == 'yes'){
-        echo woo_payflex_frontend_widget();
+        echo woo_payflex_frontend_widget(); 
     }
 }
 global $wp_version;
@@ -269,9 +270,9 @@ if($wp_version >= 6.3){
 function widget_shortcode_content()
 {
     $payflex_settings = get_option('woocommerce_payflex_settings');
-    if($payflex_settings['is_using_page_builder'] == 'yes'){
+    // if($payflex_settings['is_using_page_builder'] == 'yes'){
         return woo_payflex_frontend_widget();
-    }
+    // }
 }
 
 add_shortcode('payflex_widget', 'widget_shortcode_content');

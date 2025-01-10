@@ -1,6 +1,7 @@
+
 === Payflex Payment Gateway ===
-Contributors: woocommerce
-Tags: credit card,debit card, payflex, payment request, woocommerce
+Contributors: tomlister, nmjbhoffmann, nathanjeffery
+Tags: payment gateway, woocommerce, buy now pay later
 Requires at least: 4.4
 Tested up to: 6.6.2
 Requires PHP: 7.4
@@ -10,7 +11,7 @@ License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 == Description ==
 
-The Payflex extension for WooCommerce enables you to accept payments in intallments via one of South Africa’s most popular payment gateways.
+The Payflex extension for WooCommerce enables you to accept payments in installments via one of South Africa’s most popular payment gateways.
 
 = Why choose Payflex? =
 
