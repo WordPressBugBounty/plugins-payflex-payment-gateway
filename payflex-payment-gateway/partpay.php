@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Payflex Payment Gateway
  * Description: Payflex payment gateway plugin for WooCommerce. Supports pay now as well as buy now pay later.
- * Version: 2.6.4
+ * Version: 2.6.5
  * Author: Payflex
  * Author URI: https://payflex.co.za/
  * WC requires at least: 6.0
@@ -20,6 +20,23 @@ if (!function_exists('is_plugin_active') || !function_exists('is_plugin_active_f
 }
 $woocommerce_active = is_plugin_active('woocommerce/woocommerce.php') || is_plugin_active_for_network('woocommerce/woocommerce.php');
 if (!$woocommerce_active) return;
+
+/**
+ * Add settings link on plugin page
+ */
+add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), function ( $actions )
+{
+    return array_merge( $actions, [
+        '<a href="' . admin_url( 'admin.php?page=wc-settings&tab=checkout&section=payflex' ) . '">Settings</a>',
+    ]);
+} );
+
+
+
+function payflex_plugin_basename()
+{
+    return plugin_basename(__FILE__);
+}
 
 function woocommerce_add_payflex_gateway($methods)
 {
@@ -391,10 +408,22 @@ add_action( 'woocommerce_after_single_product', 'payflex_update_price_on_variati
 function payflex_update_price_on_variation() {
     global $product;
 
+    $payflex = WC_Gateway_PartPay::instance();
+
+    $debug_mode = $payflex->get_debug_mode();
+
     if(!$product){ return; }
 
         ?>
         <script>
+            <?php
+            // Pass debug mode to js
+            if($debug_mode){
+                echo 'var debug_mode = true;';
+            }else{
+                echo 'var debug_mode = false;';
+            }
+            ?>
             // Function to get the price
             function getWooCommercePrice() {
                 // woocommerce-Price-amount amount
@@ -413,7 +442,8 @@ function payflex_update_price_on_variation() {
                 var pay_type = jQuery('.payflexCalculatorWidgetContainer').data('pay_type');
 
                 PayflexWidget.update(price, pay_type);
-                // console.log('Payflex price updated: ' + price);
+
+                if(debug_mode) console.log('Payflex Debug: Widget price updated on variation change: ' + price);
             });
 
             // Listen for changes in the price (useful for simple products)
@@ -422,7 +452,8 @@ function payflex_update_price_on_variation() {
                 var pay_type = jQuery('.payflexCalculatorWidgetContainer').data('pay_type');
 
                 PayflexWidget.update(price, pay_type);
-                // console.log('Payflex price updated: ' + price);
+
+                if(debug_mode) console.log('Payflex Debug: Widget price updated on price change: ' + price);
             });
 
         </script>

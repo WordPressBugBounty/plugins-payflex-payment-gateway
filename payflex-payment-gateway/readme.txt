@@ -3,9 +3,9 @@
 Contributors: tomlister, nmjbhoffmann, nathanjeffery
 Tags: payment gateway, woocommerce, buy now pay later
 Requires at least: 4.4
-Tested up to: 6.6.2
+Tested up to: 6.7.2
 Requires PHP: 7.4
-Stable tag: 2.6.4
+Stable tag: 2.6.5
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -115,3 +115,6 @@ That’s our problem. You get 100% of the purchase amount (less the Payflex fee)
      * Added WooCommerce HPOS compatibilty flag
 = 2.6.4 =
      * Updated widget to fix issues with certain themes
+= 2.6.5 =
+     * Added debug mode
+     * Reduced logging output when debug mode is disabled

@@ -1,5 +1,7 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 
+use Automattic\WooCommerce\Internal\Admin\Logging\Settings as WC_Settings;
+
 /**
  * Payflex Payment Gateway
  * 
@@ -11,7 +13,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     protected string $configurationUrl = '';
     protected string $orderurl = '';
 
-    private $version = '2.6.4';
+    private $version = '2.6.5';
 
     /**
         * @var $_instance WC_Gateway_PartPay The reference to the singleton instance of this class
@@ -45,6 +47,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     public $WC_Order_ID = false;
 
     public $current_order_proccessed = false;
+
+    public $debug_mode = false;
 
     public $payflex_worfklow_status = false;
 
@@ -103,6 +107,10 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         $this->configurationUrl = '';
         if (false !== $settings)
         {
+            // Check debug mode
+            if(isset($this->settings['payflex_debug'])) // Debug mode is fairly new, so we need to make sure the value is set
+                $this->debug_mode = $this->settings['payflex_debug'] == 'yes' ? true : false;
+
             $api_url = $this->environments[$this->settings['testmode']]['api_url'];
             $this->orderurl = $api_url . '/order';
             $this->configurationUrl = $api_url . '/configuration';
@@ -191,6 +199,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         return $this->base_plugin_dir . ltrim($path, '/');
     }
 
+    /**
+     * Get debug mode
+     */
+    public function get_debug_mode()
+    {
+        return $this->debug_mode;
+    }
+
 
     /**
         * Initialise Gateway Settings Form Fields
@@ -200,6 +216,13 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     public function init_form_fields()
     {
 
+        // Check if current access token is valid
+        $payflex_api_accessable   = ($this->get_partpay_authorization_code() !== false);
+
+        $pf_connection_status     = ($payflex_api_accessable) ? 'Successfully connected' : 'Connection failed, please check your credentials';
+
+        $pf_connection_status_class = ($payflex_api_accessable) ? 'payflex_debug_success' : 'payflex_debug_error';
+        
         $env_values = array();
         foreach ($this->environments as $key => $item)
         {
@@ -219,6 +242,16 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             '4' => 'Pay in 4',
             '3' => 'Pay in 3'
         ];
+
+        $pf_merch_value       = 'your-merchant-name';
+        $pf_merch_ref_example = 'https://widgets.payflex.co.za/<span class="pf-merch-value">'.$pf_merch_value.'</span>/payflex-widget-2.0.0.js?type=calculator';
+
+        $wp_option = get_option('woocommerce_payflex_settings');
+
+        if($wp_option['merchant_widget_reference'] != '')
+        {
+            $pf_merch_ref_example = 'https://widgets.payflex.co.za/<span class="pf-merch-value">'.$wp_option['merchant_widget_reference'].'</span>/payflex-widget-2.0.0.js?type=calculator';
+        }
 
         $this->form_fields = array(
             'enabled' => array(
@@ -243,7 +276,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             'client_id' => array(
                 'title' => __('Client ID', 'woo_payflex') ,
                 'type' => 'text',
-                'description' => __('Payflex Client ID credential', 'woo_payflex') ,
+                'description' => __('Payflex Client ID credential <br/><span class="pfConnectionStatus '.$pf_connection_status_class.'">'.$pf_connection_status.'</span>', 'woo_payflex') ,
                 'default' => __('', 'woo_payflex')
             ) ,
             'client_secret' => array(
@@ -270,7 +303,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'title'       => __('Pay Months', 'woo_payflex') ,
                 'type'        => 'select',
                 'options'     => $pay_type,
-                'description' => __('Select the number of months to pay.', 'woo_payflex') ,
+                'description' => __('Select the number of months to pay.<br/><br/>Preview: <br/><span class="pfwidgetpreview"></span>', 'woo_payflex') ,
                 'default'     => '4'
             ) ,
 
@@ -281,36 +314,176 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'default' => 'yes',
 
             ),
-            'is_using_page_builder' => array(
-                'title' => __('Product Page Widget using any page builder', 'woo_payflex') ,
-                'type' => 'checkbox',
-                'label' => __('Enable Product Page Widget using page builder', 'woo_payflex') ,
-                'default' => 'no',
-                'description' => __('<h3 class="wc-settings-sub-title">Page Builders</h3> If you use a page builder plugin, the above payment info can be placed using a shortcode instead of relying on hooks. Use [payflex_widget] within a product page.', 'woo_payflex')
-
-            ) ,
+            // 'is_using_page_builder' => array(
+            //     'title' => __('Product Page Widget using any page builder', 'woo_payflex') ,
+            //     'type' => 'checkbox',
+            //     'label' => __('Enable Product Page Widget using page builder', 'woo_payflex') ,
+            //     'default' => 'no',
+            //     'description' => __('<h3 class="wc-settings-sub-title">Page Builders</h3> If you use a page builder plugin, the above payment info can be placed using a shortcode instead of relying on hooks. Use [payflex_widget] within a product page.', 'woo_payflex')
+            // ) ,
             'enable_checkout_widget' => array(
                 'title' => __('Checkout Page Widget', 'woo_payflex') ,
                 'type' => 'checkbox',
                 'label' => __('Enable Checkout Page Widget', 'woo_payflex') ,
                 'default' => 'yes'
             ) ,
+
             'merchant_widget_reference' => array(
-                'title' => __('Widget Reference', 'woo_payflex') ,
-                'type' => 'text',
-                'label' => __('Widget Reference', 'woo_payflex') ,
-                'default' => __('', 'woo_payflex'),
-                'description' => __('This is the reference that will be used to identify the widget on Payflex.', 'woo_payflex')
+                'title'       => __('Widget Reference', 'woo_payflex'),
+                'type'        => 'text',
+                'label'       => __('Widget Reference', 'woo_payflex'),
+                'default'     => __('', 'woo_payflex'),
+                'description' => __('This is an optional reference that will be used to identify the widget on Payflex. <br/>Example: <span class="pf_merchant_ref_example">'.$pf_merch_ref_example.'</span><br/><br/>Info: <a href="https://widgets.payflex.co.za/index-2.html" target="_blank">https://widgets.payflex.co.za/index-2.html</a>', 'woo_payflex')
             ) ,
-            // 'enable_order_notes' => array(
-            //     'title' => __('Order Page Notes', 'woo_payflex') ,
-            //     'type' => 'checkbox',
-            //     'label' => __('Enable Order Detail Page Notes', 'woo_payflex') ,
-            //     'default' => 'no'
-            // )
+            
+            // Debug Mode
+            'payflex_debug' => array(
+                'title'       => __('Debug Output', 'woo_payflex'),
+                'type'        => 'checkbox',
+                'label'       => __('Enable Debug Output', 'woo_payflex'),
+                'default'     => 'no',
+                'description' => __('Enable debug messages. Note this is not intended to be enabled day to day and should only be enabled during testing', 'woo_payflex')
+            ) ,
+
         );
+
+        // Add script to settings page
+        add_action('admin_footer', array(
+            $this,
+            'add_script_to_settings_page'
+        ));
     } // End init_form_fields()
     
+    public function add_script_to_settings_page()
+    {
+        ?>
+        <script>
+            // Make sure the pf_merchant_ref_example value that's used is url safe
+            jQuery(document).on('keyup', '#woocommerce_payflex_merchant_widget_reference', function(){
+                var pfinputmerchref = jQuery(this).val();
+
+                // Can have any value that's safe in a url, including hyphens and underscores. If a space is used, replace it with a hyphen
+                pfinputmerchref = pfinputmerchref.replace(/ /g, '-');
+                
+                // Make sure there's only ever one hyphen in a row
+                pfinputmerchref = pfinputmerchref.replace(/-+/g, '-');
+
+                // Remove special characters and anything else that's not a letter, number, hyphen or underscore
+
+                pfinputmerchref = pfinputmerchref.replace(/[^a-zA-Z0-9-_]/g, '');
+
+                jQuery(this).val(pfinputmerchref);
+
+                var pfmerchstringvalue = jQuery(this).val();
+
+                if(pfmerchstringvalue == ''){
+                    pfmerchstringvalue = 'your-merchant-name';
+                }
+
+                jQuery('.pf-merch-value').text(pfmerchstringvalue);
+                
+            });
+
+            jQuery(document).ready(function($){
+                $('.pf_merchant_ref_example').css('color', '#0073aa');
+            });
+
+            // Dynamicaly load the widget into pfwidgetpreview
+            jQuery(document).on('change', '#woocommerce_payflex_widget_style , #woocommerce_payflex_widget_theme, #woocommerce_payflex_pay_type', function(){
+                var widget_style       = jQuery('#woocommerce_payflex_widget_style').val();
+                var widget_theme       = jQuery('#woocommerce_payflex_widget_theme').val();
+                var pay_type           = jQuery('#woocommerce_payflex_pay_type').val();
+                var widget_preview     = jQuery('.pfwidgetpreview');
+                if(widget_theme == ''){
+                    widget_preview.removeClass('dark');
+                }else{
+                    widget_preview.addClass('dark');
+                }
+                var widget_preview_url = 'https://widgets.payflex.co.za/your-merchant-name/payflex-widget-2.0.0.js?type=calculator&amount=1000&logo_type=' + widget_style + '&theme=' + widget_theme + '&pay_type=' + pay_type;
+                widget_preview.html('<script src="' + widget_preview_url + '"><\/script>');
+            });
+
+            // Load widget on page load
+            jQuery(document).ready(function(){
+                var widget_style       = jQuery('#woocommerce_payflex_widget_style').val();
+                var widget_theme       = jQuery('#woocommerce_payflex_widget_theme').val();
+                var pay_type           = jQuery('#woocommerce_payflex_pay_type').val();
+                var widget_preview     = jQuery('.pfwidgetpreview');
+                if(widget_theme == ''){
+                    widget_preview.removeClass('dark');
+                }else{
+                    widget_preview.addClass('dark');
+                }
+                var widget_preview_url = 'https://widgets.payflex.co.za/your-merchant-name/payflex-widget-2.0.0.js?type=calculator&amount=1000&logo_type=' + widget_style + '&theme=' + widget_theme + '&pay_type=' + pay_type;
+                widget_preview.html('<script src="' + widget_preview_url + '"><\/script>');
+            });
+
+            // pfConnectionStatus, when Client ID or secret is entered, update the text to tell you to save settings
+            jQuery(document).on('keyup', '#woocommerce_payflex_client_id, #woocommerce_payflex_client_secret', function(){
+                jQuery('.pfConnectionStatus').text('Save settings to attempt authentication');
+                jQuery('.pfConnectionStatus').removeClass('payflex_debug_success');
+                jQuery('.pfConnectionStatus').removeClass('payflex_debug_error');
+            });
+        </script>
+
+        <style>
+            .pf_merchant_ref_example{
+                font-size: 12px;
+                background-color: #fff;
+                padding: 2px;
+                border-radius: 4px;
+            }
+
+            /* Make the table look nice */
+            .payflex-support-settings-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .payflex-support-settings-table th {
+                padding: 10px;
+                text-align: left;
+                border-bottom: 1px solid #e5e5e5;
+                
+            }
+            .payflex-support-settings-table td {
+                padding: 10px;
+                border-bottom: 1px solid #e5e5e5;
+            }
+            .payflex-support-settings-table tr:last-child td {
+                border-bottom: none;
+            }
+            .payflex-support-settings-table tr:last-child th {
+                border-bottom: none;
+            }
+            .pfwidgetpreview{
+                max-width: 800px;
+                display: block;
+                /* resizable */
+                resize: horizontal;
+                overflow: auto;
+                border: 1px solid #e5e5e5;
+            }
+            .pfwidgetpreview.dark{
+                background-color: #333;
+                color: #fff;
+            }
+
+            .pfConnectionStatus{
+                font-size: 12px;
+                color: #0073aa;
+            }
+
+            .payflex_debug_success{
+                color: #46b450;
+            }
+            .payflex_debug_error{
+                color: #ff0000;
+            }
+
+        </style>
+        <?php
+    }
+
     /**
         * Init JS Scripts Options
         *
@@ -321,6 +494,17 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         //use WP native jQuery
         wp_enqueue_script("jquery");
 
+    }
+
+    /**
+     * Get Woocommerce logging status
+     */
+    public function get_wc_logging_status()
+    {
+        $wc_settings = new WC_Settings();
+        $is_logging_enabled = $wc_settings->logging_is_enabled();
+
+        return $is_logging_enabled;
     }
 
     /**
@@ -357,7 +541,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     ?>
         <h3><?php esc_html_e('Payflex Gateway', 'woo_payflex'); ?></h3>
 
-        <table class="form-table">
+        <table class="form-table payflex-support-settings-table">
             <?php
         // Generate the HTML For the settings form.
         $this->generate_settings_html();
@@ -373,10 +557,21 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     
     public function on_save_settings()
     {
-        $this->log('Settings Updated');
         # Reset the access token
         $this->get_partpay_authorization_code(true);
 
+        # Get environment mode
+        $env = $this->settings['testmode'];
+
+        # Log authentication state
+        if($this->get_partpay_authorization_code())
+        {
+            $this->log('Settings Updated: Environment ('.$env.') Authentication state: Success!');
+        }
+        else
+        {
+            $this->log('Settings Updated: Environment ('.$env.') Authentication state: Failed', 'error');
+        }
         # Update limits
         // $this->update_payment_limits();
     }
@@ -570,7 +765,10 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         // Cron checks
         $cron_orders = $WC->get_pending_abandoned_orders();
-        
+
+        // Check if WC has logging enabled using the WC_Admin_Settings
+        $is_logging_enabled = $WC->get_wc_logging_status();
+
         ?>
         <div class="wrap">
             <h1>Payflex Support</h1>
@@ -617,10 +815,12 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                     <tr>
                         <td>WooCommerce Version: </td>
                         <td>
-                            <?php if(version_compare(WC()->version, '6.5', '>=')): ?>
+                            <?php if(version_compare(WC()->version, '9.6', '>=')): ?>
                                 <span class="payflex_debug_success">WooCommerce v<?=WC()->version?></span>
+                            <?php elseif(version_compare(WC()->version, '9.0', '>')): ?>
+                                <span class="payflex_debug_warning">WooCommerce v<?=WC()->version?> Isn't officially supported, but isn't too old and should work with possible minor bugs, please consider updating Woocommerce</span>
                             <?php else:?>
-                                <span class="payflex_debug_error">WooCommerce v<?=WC()->version?> Isn't officially supported</span>
+                                <span class="payflex_debug_error">WooCommerce v<?=WC()->version?> is seriously outdated, please update Woocommerce as soon as possible</span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -674,6 +874,16 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                                 Any orders abandoned during the checkout process are added to a schedule. They always wait at least 30 minutes before running. <br>
                                 After 30 minutes, they will be added to a schedule that checks every 2 minutes. After 2 hours, we stop checking.
                             </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Woocommerce Log Files</td>
+                        <td>
+                            <?php if($is_logging_enabled): ?>
+                                <span class="payflex_debug_success">Woocommerce logging enabled: </span><a href="<?=admin_url('admin.php?page=wc-status&tab=logs')?>">View Logs</a>
+                            <?php else:?>
+                                <span class="payflex_debug_error">Woocommerce logging disabled. Payflex will not save logs. You can enable it here:</span> <a href="<?=admin_url('admin.php?page=wc-status&tab=logs&view=settings')?>">Woocommerce Log settings</a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr class="no-border">
@@ -746,6 +956,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 </div>
             <?php endif; ?>
 
+                
             <script>
                 // Remove force_cron from URL, keeping all other parameters on page load
                 window.onload = function(){
@@ -849,11 +1060,17 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if (false === $this->apiKeysAvailable())
         {
-            $this->log('No api keys available');
+            if($this->get_debug_mode())
+                $this->log('No api keys available');
             return false;
         }
         
-        $this->log('Getting new access token');
+        // Debug mode check
+        if($this->get_debug_mode())
+        {
+            $this->log('Getting new access token');
+        }
+
         $AuthURL = $this->environments[$this->settings['testmode']]['auth_url'];
         $AuthBody = ['client_id' => $this->settings['client_id'], 'client_secret' => $this->settings['client_secret'], 'audience' => $this->environments[$this->settings['testmode']]['auth_audience'], 'grant_type' => 'client_credentials'];
         $AuthBody = wp_json_encode($AuthBody);
@@ -872,7 +1089,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             //store token in cache
             $accessToken = isset($body['access_token']) ? $body['access_token'] : '';
             $expireTime = isset($body['expires_in']) ? $body['expires_in'] : '';
-            $this->log('Storing new token in cache ' . $accessToken . ' which is valid for ' . $expireTime . ' seconds');
+            $accessToken_short = substr($accessToken, 0, 10).'...'.substr($accessToken, -10);
+            $this->log('Storing new token in cache ' . $accessToken_short . ' which is valid for ' . $expireTime . ' seconds');
             set_transient('payflex_access_token', $accessToken, ((int)$expireTime - 120));
             set_transient('payflex_access_token_date', time(), ((int)$expireTime - 120));
             return $accessToken;
@@ -893,7 +1111,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if (empty($this->settings['client_id']) || empty($this->settings['client_secret']))
         {
-            $this->log('API keys not available.');
+            if($this->get_debug_mode())
+                $this->log('API keys not available.');
             return false;
         }
 
@@ -925,7 +1144,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
             if (!is_wp_error($response) && isset($response['response']['code']) && $response['response']['code'] == 200)
             {
-                $this->log('Updating payment limits');
+                if($this->get_debug_mode()) $this->log('Updating payment limits');
+                
                 $settings['partpay-amount-minimum'] = isset($body['minimumAmount']) ? $body['minimumAmount'] : 0;
                 $settings['partpay-amount-maximum'] = isset($body['maximumAmount']) ? $body['maximumAmount'] : 0;
             }
@@ -1115,7 +1335,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if(is_wp_error($order_response))
         {
-            if (defined('WP_DEBUG') && WP_DEBUG)
+            if ($this->debug_mode)
             {
                 wc_add_notice(__('There was an issue connecting to Payflex servers. Please try again later.', 'woo_payflex') , 'error');
             }
@@ -1124,6 +1344,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 wc_add_notice(__('Sorry, there was a problem preparing your payment. Please try again later.', 'woo_payflex') , 'error');
             }
 
+            $this->log('User attempted Payflex payment and an error occured - ' . $order_response->get_error_message());
+
             return array(
                 'result' => 'failure',
                 'redirect' => $order->get_checkout_payment_url(true)
@@ -1131,10 +1353,9 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         }
 
         $order_body = json_decode(wp_remote_retrieve_body($order_response));
-
         if(!is_object($order_body))
         {
-            if (defined('WP_DEBUG') && WP_DEBUG)
+            if ($this->debug_mode)
             {
                 wc_add_notice(__('Payflex API return is not a valid object, API might be under maintenance or there was an undefined issue with the sent data', 'woo_payflex') , 'error');
             }
@@ -1142,6 +1363,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             {
                 wc_add_notice(__('Sorry, there was a problem preparing your payment.', 'woo_payflex') , 'error');
             }
+            
+            $this->log('User attempted Payflex payment and an error occured - Payflex API return is not a valid object, API might be under maintenance or there was an undefined issue with the sent data', 'error');
 
             return array(
                 'result' => 'failure',
@@ -1151,11 +1374,15 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if(!isset($order_body->redirectUrl) OR !isset($order_body->orderId) OR !isset($order_body->token))
         {
-            if (defined('WP_DEBUG') && WP_DEBUG)
+            if ($this->debug_mode)
             {
                 if(isset($order_body->message))
                 {
-                    wc_add_notice(__('Payflex payment error. Successfully connected to Payflex, but did not get back expected data.<br/>API Responded with: '.$order_body->message, 'woo_payflex') , 'error');
+                    // This currently doesn't trigger correctly due to a Woocommerce bug https://github.com/woocommerce/woocommerce/issues/51272
+                    wc_add_notice(__('Payflex payment error. Successfully connected to Payflex, but did not get back expected data.<br/> API Responded with: '.$order_body->message, 'woo_payflex') , 'error');
+
+                    $this->log('User attempted Payflex payment and an error occured - Successfully connected to Payflex gateway, but did not get back expected data. API Responded with: '.$order_body->message, 'error');
+
                     return array(
                         'result' => 'failure',
                         'redirect' => $order->get_checkout_payment_url(true)
@@ -1164,7 +1391,11 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
                 if(isset($order_body->response) AND isset($order_body->response->message))
                 {
-                    wc_add_notice(__('Payflex payment error. Successfully connected to Payflex, but did not get back expected data.<br/>API Responded with: '.$order_body->message, 'woo_payflex') , 'error');
+
+                    wc_add_notice(__('Payflex payment error. Successfully connected to Payflex, but did not get back expected data.<br/> API Responded with: '.$order_body->message, 'woo_payflex') , 'error');
+
+                    $this->log('User attempted Payflex payment and an error occured - Successfully connected to Payflex gateway, but did not get back expected data. API Responded with: '.$order_body->message, 'error');
+
                     return array(
                         'result' => 'failure',
                         'redirect' => $order->get_checkout_payment_url(true)
@@ -1175,7 +1406,16 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             }
             else
             {
-                wc_add_notice(__('Sorry, there was a problem preparing your payment.', 'woo_payflex') , 'error');
+                $message = 'Sorry, there was a problem preparing your payment.';
+                if(isset($order_body->message) AND !empty($order_body->message))
+                {
+                    $message = $order_body->message;
+                }
+
+                wc_add_notice(__('Sorry, there was a problem processing your payment using Payflex.', 'woo_payflex') , 'error');
+
+                $this->log('User attempted Payflex payment and an error occured - Successfully connected to Payflex gateway, but something went wrong. API Responded with: '.$message, 'error');
+
             }
             
             return array(
@@ -1187,7 +1427,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         if ($access_token == false)
         {
             // Couldn't generate token
-            if (defined('WP_DEBUG') && WP_DEBUG)
+            if ($this->debug_mode)
             {
                 wc_add_notice(__('Payflex API Token appears to be invalid', 'woo_payflex') , 'error');
             }
@@ -1291,7 +1531,16 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      * @param $order_id
      */
     public function payment_callback($order_id)
-    {   
+    {
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+
+        // Check for cookies in the header
+        if (empty($_COOKIE)) {
+            $this->log('No cookies detected, user either has cookies disabled or the browser is prefetching the page');
+            // Instead of redirecting, just fail silently
+            return;
+        }
+
         // Make sure the order id is set
         if(!isset($_GET['order_id']) OR !isset($_GET['status']) OR !isset($_GET['token']))
         {
@@ -1353,10 +1602,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         {
             $order_note = __('Payment approved.<br>Payflex order ID: <a href="#" >' . $order_id_url, 'woo_payflex');
 
-            if($this->get_payflex_workflow_status($order_id) !== 'completed')
+            if($this->get_payflex_workflow_status($order_id) !== 'completed' )
+            {
                 $order->add_order_note($order_note);
-
-            $order->payment_complete($payflex_order_id);
+                $order->payment_complete($payflex_order_id);
+            }
+            else{
+                $order->add_order_note(__('Payflex payment already completed, user returned more than once. Order ID from Payflex: ' . $order_id_url, 'woo_payflex'));
+            }
 
             $this->set_payflex_workflow_status($order_id, 'completed');
 
@@ -1649,7 +1902,9 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      */
     public function check_pending_abandoned_orders($skip_new_order_check = false)
     {
-        $this->log('#### Order CRON running ####');
+        // Check debug mode
+        if($this->debug_mode)
+            $this->log('#### Order CRON running ####');
     
         if($skip_new_order_check)
         {
@@ -1659,8 +1914,23 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         {
             $pending_orders = $this->get_pending_abandoned_orders('scheduled');
         }
-        
-        $this->log('Checking ' . count($pending_orders) . " orders");
+
+        $prefix = 'Payflex CRON: ';
+
+        // If Debug mode is enable, we will know the cron is running, so we don't need to state it again
+        if($this->debug_mode) $prefix = '';
+
+        if(count($pending_orders) > 0 OR $this->debug_mode)
+        {
+            if(count($pending_orders) === 0)
+            {
+                $this->log($prefix.'No orders to check');
+            }
+            else
+            {
+                $this->log($prefix.'Checking ' . count($pending_orders) . " orders");
+            }
+        }
 
         foreach ($pending_orders as $pending_order)
         {
@@ -1687,8 +1957,9 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 $this->log('No Payflex OrderId for Order ' . $pending_order->get_id());
                 continue;
             }
+            
+            $this->log($prefix.'Checking abandoned order for WC Order ID ' . $order->get_id() . ', Payflex ID ' . $partpay_order_id);
 
-            $this->log('Checking abandoned order for WC Order ID ' . $order->get_id() . ', Payflex ID ' . $partpay_order_id);
 
             // Get the order status from Payflex
             $response = wp_remote_get($this->orderurl . '/' . $partpay_order_id, array(
@@ -1730,6 +2001,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                     $order->add_order_note($order_note);
                 
                 $order->payment_complete($pending_order->get_id());
+                # Update meta status
+                $this->set_payflex_workflow_status($pending_order->get_id(), 'completed');
                 continue;
             }
 
@@ -1747,10 +2020,25 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
             if ($body->orderStatus == 'Abandoned' OR $body->orderStatus == 'Declined')
             {
+                # Get workflow status
+                $workflow_updated = FALSE;
+                $workflow_status = $this->get_payflex_workflow_status($pending_order->get_id());
+
+                if($workflow_status !== $body->orderStatus.'cron_checked') $workflow_updated = TRUE;
+
+
                 $order_note = __('Payment checked via CRON. Order '.$body->orderStatus.'.<br>Payflex order ID: ' . $order_id_url, 'woo_payflex');
+
+                # Set order workflow status
+                if(!$workflow_updated)
+                {
+                    $this->set_payflex_workflow_status($pending_order->get_id(), $body->orderStatus.'cron_checked');
+                }
+
+
                 $isExist = $this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note);
 
-                if(!$isExist){
+                if(!$isExist AND $workflow_updated){
                     $order->add_order_note($order_note);
                 }
                 $order->update_status('cancelled');
@@ -1760,6 +2048,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             if(!$this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note))
                 $order->add_order_note($order_note);
 
+            # We will continue to update the order, but not update the order notes
             $order->update_status('failed');
 
         }
@@ -1775,7 +2064,6 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      */
     public function get_pending_abandoned_orders($new_scheduled = false)
     {
-
         // Get all orders that are pending, including the new ones.
         if($new_scheduled == 'all')
         {
@@ -1798,15 +2086,17 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         if($new_scheduled == 'new' OR $new_scheduled == FALSE)
         {
             $pending_orders['new'] = wc_get_orders([
-                'status' => [
-                    'pending',
-                    'failed',
-                    'cancelled'
-                ],
                 'payment_method' => 'payflex',
 
                 // get orders from the last 30 minutes
-                'date_created' => (time() - 1800).'...'.time()
+                'date_created' => (time() - 1800).'...'.time(),
+                'meta_query' => [
+                    [
+                        'key' => '_payflex_workflow_status',
+                        'value' => 'initiated',
+                        'compare' => '='
+                    ]
+                ]
             ]);
 
             if($new_scheduled == 'new') return $pending_orders['new'];
@@ -1816,12 +2106,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         if($new_scheduled == 'scheduled' OR $new_scheduled == FALSE)
         {
             $pending_orders['scheduled'] = wc_get_orders([
-                'status' => [
-                    'pending',
-                    'failed',
-                    'cancelled'
-                ],
                 'payment_method' => 'payflex',
+                'meta_query' => [
+                    [
+                        'key' => '_payflex_workflow_status',
+                        'value' => 'initiated',
+                        'compare' => '='
+                    ]
+                ],
 
                 // get orders older than 30 minutes but less than 2 hours
                 'date_created' => (time() - 7200).'...'.(time() - 1800)
@@ -1995,6 +2287,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         $order = $this->get_order($order_id);
         
         $order->update_meta_data('_payflex_workflow_status', $status);
+        
         $order->save();
 
         $this->payflex_worfklow_status = $status;
@@ -2085,4 +2378,5 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         return $body;
     }
+
 }
