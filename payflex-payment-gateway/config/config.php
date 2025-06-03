@@ -1,7 +1,7 @@
 <?php
 $environments = array();
 $environments["develop"] 	=	array(
-	"name"		=>	"Sandbox Test",
+	"name"		=>	"Sandbox",
 	"api_url"	=>	"https://api.uat.payflex.co.za",
 	"auth_url"  =>  "https://auth-uat.payflex.co.za/auth/merchant",
 	"web_url"	=>	"https://api.uat.payflex.co.za",

@@ -13,7 +13,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     protected string $configurationUrl = '';
     protected string $orderurl = '';
 
-    private $version = '2.6.5';
+    private $version = '2.6.6';
 
     /**
         * @var $_instance WC_Gateway_PartPay The reference to the singleton instance of this class
@@ -217,7 +217,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     {
 
         // Check if current access token is valid
-        $payflex_api_accessable   = ($this->get_partpay_authorization_code() !== false);
+        $payflex_api_accessable   = ($this->get_payflex_authorization_code() !== false);
 
         $pf_connection_status     = ($payflex_api_accessable) ? 'Successfully connected' : 'Connection failed, please check your credentials';
 
@@ -259,7 +259,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'type' => 'checkbox',
                 'label' => __('Enable Payflex', 'woo_payflex') ,
                 'default' => 'yes'
-            ) ,
+            ),
             'title' => array(
                 'title' => __('Title', 'woo_payflex') ,
                 'type' => 'text',
@@ -267,11 +267,11 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'default' => __('Payflex', 'woo_payflex')
             ) ,
             'testmode' => array(
-                'title' => __('Test mode', 'woo_payflex') ,
-                'label' => __('Enable Test mode', 'woo_payflex') ,
+                'title' => __('Environment', 'woo_payflex') ,
+                // 'label' => __('Environment', 'woo_payflex') ,
                 'type' => 'select',
                 'options' => $env_values,
-                'description' => __('Process transactions in Test/Sandbox mode. No transactions will actually take place.', 'woo_payflex') ,
+                'description' => __('Select which environment to use, Sandbox or Production.', 'woo_payflex') ,
             ) ,
             'client_id' => array(
                 'title' => __('Client ID', 'woo_payflex') ,
@@ -314,20 +314,12 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'default' => 'yes',
 
             ),
-            // 'is_using_page_builder' => array(
-            //     'title' => __('Product Page Widget using any page builder', 'woo_payflex') ,
-            //     'type' => 'checkbox',
-            //     'label' => __('Enable Product Page Widget using page builder', 'woo_payflex') ,
-            //     'default' => 'no',
-            //     'description' => __('<h3 class="wc-settings-sub-title">Page Builders</h3> If you use a page builder plugin, the above payment info can be placed using a shortcode instead of relying on hooks. Use [payflex_widget] within a product page.', 'woo_payflex')
-            // ) ,
             'enable_checkout_widget' => array(
                 'title' => __('Checkout Page Widget', 'woo_payflex') ,
                 'type' => 'checkbox',
                 'label' => __('Enable Checkout Page Widget', 'woo_payflex') ,
                 'default' => 'yes'
             ) ,
-
             'merchant_widget_reference' => array(
                 'title'       => __('Widget Reference', 'woo_payflex'),
                 'type'        => 'text',
@@ -335,7 +327,13 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'default'     => __('', 'woo_payflex'),
                 'description' => __('This is an optional reference that will be used to identify the widget on Payflex. <br/>Example: <span class="pf_merchant_ref_example">'.$pf_merch_ref_example.'</span><br/><br/>Info: <a href="https://widgets.payflex.co.za/index-2.html" target="_blank">https://widgets.payflex.co.za/index-2.html</a>', 'woo_payflex')
             ) ,
-            
+            'admin_only_enabled' => array(
+                'title' => __('Admin Only Mode', 'woo_payflex') ,
+                'type' => 'checkbox',
+                'label' => __('Enable Admin Only Mode', 'woo_payflex') ,
+                'default' => 'no',
+                'description' => __('Only enable Payflex when the user is logged into the Wordpress Backend.<br/>"Enable Payflex" will need to be selected as well.', 'woo_payflex')
+            ) ,
             // Debug Mode
             'payflex_debug' => array(
                 'title'       => __('Debug Output', 'woo_payflex'),
@@ -558,13 +556,13 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     public function on_save_settings()
     {
         # Reset the access token
-        $this->get_partpay_authorization_code(true);
+        $this->get_payflex_authorization_code(true);
 
         # Get environment mode
         $env = $this->settings['testmode'];
 
         # Log authentication state
-        if($this->get_partpay_authorization_code())
+        if($this->get_payflex_authorization_code())
         {
             $this->log('Settings Updated: Environment ('.$env.') Authentication state: Success!');
         }
@@ -590,90 +588,9 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      */
     public function payment_fields()
     {
-
         global $woocommerce;
-        $settings = get_option('woocommerce_payflex_settings');
-        if (isset($settings['enable_checkout_widget']) && $settings['enable_checkout_widget'] == 'yes')
-        {
-            echo '<style>.elementor{max-width:100% !important}';
-            echo 'html {
-                    -webkit-font-smoothing: antialiased!important;
-                    -moz-osx-font-smoothing: grayscale!important;
-                    -ms-font-smoothing: antialiased!important;
-                }
-                .md-stepper-horizontal {
-                    display:table;
-                    width:100%;
-                    margin:0 auto;
-                    background-color:transparent;
-                }
-                .md-stepper-horizontal .md-step {
-                    display:table-cell;
-                    position:relative;
-                    padding:0;
-                }
-                .md-stepper-horizontal .md-step .md-step-circle {
-                    width:30px;
-                    height:30px;
-                    margin:0 auto;
-                    border-radius: 50%;
-                    text-align: center;
-                    line-height:30px;
-                    font-size: 16px;
-                    font-weight: 600;
-                    color:#FFFFFF;
-                }
-                .md-stepper-horizontal .md-step .md-step-title {
-                    margin-top:16px;
-                    font-size:16px;
-                    font-weight:600;
-                }
-                .md-stepper-horizontal .md-step .md-step-title,
-                .md-stepper-horizontal .md-step .md-step-optional {
-                    text-align: center;
-                    color : #002751;
-                }
-                .md-stepper-horizontal .md-step .md-step-optional {
-                    font-size:12px;
-                }
-                .payflex_description{
-                    font-size:16px;text-align:center;
-                    margin-top:17px;
-                }
-                .fontcolor{
-                    color : #002751;
-                }
-                </style>';
-            $ordertotal = $woocommerce
-                ->cart->total;
-            $installment = round(($ordertotal / 4) , 2);
-            echo '<div class="fontcolor" style="font-size:16px;text-align:center">Four interest-free payments totalling R' . $ordertotal . '</div>';
-            echo '<div class="md-stepper-horizontal orange">
-                    <div class="md-step active">
-                    <div class="md-step-title">R' . $installment . '</div>
-                    <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-01.png') . '"></span></div>
-                    <div class="md-step-optional">1st instalment</div>
-                    </div>
-                    <div class="md-step active">
-                    <div class="md-step-title">R' . $installment . '</div>
-                    <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-02.png') . '"></span></div>
-                    <div class="md-step-optional">2 weeks later</div>
-                    </div>
-                    <div class="md-step active">
-                    <div class="md-step-title">R' . $installment . '</div>
-                    <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-03.png') . '"></span></div>
-                    <div class="md-step-optional">4 weeks later</div>
-                    </div>
-                    <div class="md-step active">
-                    <div class="md-step-title">R' . $installment . '</div>
-                    <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-04.png') . '"></span></div>
-                    <div class="md-step-optional">6 weeks later</div>
-                    </div>
-                </div>
-            <div class="payflex_description fontcolor">You will be redirected to Payflex when you click on place order.</div>
-            ';
-        }
-        else
+
+        if(!payflex_checkout_widget_enabled())
         {
             if ($this->settings['testmode'] != 'production'): ?><?php esc_html_e('TEST MODE ENABLED', 'woo_payflex'); ?><?php
             endif;
@@ -685,7 +602,86 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             {
                 echo wp_kses('<p>' . $this->description . '</p>', $arr);
             }
+            return;
         }
+
+        echo '<style>.elementor{max-width:100% !important}';
+        echo 'html {
+                -webkit-font-smoothing: antialiased!important;
+                -moz-osx-font-smoothing: grayscale!important;
+                -ms-font-smoothing: antialiased!important;
+            }
+            .md-stepper-horizontal {
+                display:table;
+                width:100%;
+                margin:0 auto;
+                background-color:transparent;
+            }
+            .md-stepper-horizontal .md-step {
+                display:table-cell;
+                position:relative;
+                padding:0;
+            }
+            .md-stepper-horizontal .md-step .md-step-circle {
+                width:30px;
+                height:30px;
+                margin:0 auto;
+                border-radius: 50%;
+                text-align: center;
+                line-height:30px;
+                font-size: 16px;
+                font-weight: 600;
+                color:#FFFFFF;
+            }
+            .md-stepper-horizontal .md-step .md-step-title {
+                margin-top:16px;
+                font-size:16px;
+                font-weight:600;
+            }
+            .md-stepper-horizontal .md-step .md-step-title,
+            .md-stepper-horizontal .md-step .md-step-optional {
+                text-align: center;
+                color : #002751;
+            }
+            .md-stepper-horizontal .md-step .md-step-optional {
+                font-size:12px;
+            }
+            .payflex_description{
+                font-size:16px;text-align:center;
+                margin-top:17px;
+            }
+            .fontcolor{
+                color : #002751;
+            }
+            </style>';
+        $ordertotal = $woocommerce
+            ->cart->total;
+        $installment = round(($ordertotal / 4) , 2);
+        echo '<div class="fontcolor" style="font-size:16px;text-align:center">Four interest-free payments totalling R' . $ordertotal . '</div>';
+        echo '<div class="md-stepper-horizontal orange">
+                <div class="md-step active">
+                <div class="md-step-title">R' . $installment . '</div>
+                <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-01.png') . '"></span></div>
+                <div class="md-step-optional">1st instalment</div>
+                </div>
+                <div class="md-step active">
+                <div class="md-step-title">R' . $installment . '</div>
+                <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-02.png') . '"></span></div>
+                <div class="md-step-optional">2 weeks later</div>
+                </div>
+                <div class="md-step active">
+                <div class="md-step-title">R' . $installment . '</div>
+                <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-03.png') . '"></span></div>
+                <div class="md-step-optional">4 weeks later</div>
+                </div>
+                <div class="md-step active">
+                <div class="md-step-title">R' . $installment . '</div>
+                <div class="md-step-circle"><span><img src ="' . $this->plugin_url('PIE-CHART-04.png') . '"></span></div>
+                <div class="md-step-optional">6 weeks later</div>
+                </div>
+            </div>
+        <div class="payflex_description fontcolor">You will be redirected to Payflex when you click on place order.</div>
+        ';
 
     }
 
@@ -714,7 +710,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     static function payflex_support_page() {
         $WC                       = WC_Gateway_PartPay::instance();
         $check_php_version        = version_compare(PHP_VERSION, '8.1', '>=');
-        $payflex_api_accessable   = ($WC->get_partpay_authorization_code() !== false);
+        $payflex_api_accessable   = ($WC->get_payflex_authorization_code() !== false);
         $payflex_order            = FALSE;
         $redirect_url             = FALSE;
 
@@ -1038,7 +1034,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      * @return  string or boolean false if no token generated
      * @since 1.0.0
      */
-    public function get_partpay_authorization_code($reset_token = false)
+    public function get_payflex_authorization_code($reset_token = false)
     {
         if($reset_token)
         {
@@ -1134,7 +1130,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         {
             $response = wp_remote_get($this->configurationUrl, array(
                 'headers' => array(
-                    'Authorization' => 'Bearer ' . $this->get_partpay_authorization_code()
+                    'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code()
                 )
             ));
             $body = json_decode(wp_remote_retrieve_body($response) , true);
@@ -1183,7 +1179,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
 
         // Get the authorization token
-        $access_token = $this->get_partpay_authorization_code();
+        $access_token = $this->get_payflex_authorization_code();
 
         //Process here
         $orderitems = $order->get_items();
@@ -1261,13 +1257,8 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             //WC 2.6.x
             $shipping_total = $order->get_total_shipping();
         }
-        $merchantRefe = $order_id;
-        $plugin_check = trailingslashit(WP_PLUGIN_DIR) . 'wt-woocommerce-sequential-order-numbers/wt-advanced-order-number.php';
-        if (in_array($plugin_check, wp_get_active_and_valid_plugins()) || (is_multisite() && in_array($plugin_check, wp_get_active_network_plugins()))){
-            $merchantRefe = $order->get_order_number();
-        }
+        $merchantRefe = $order->get_order_number();
         
-
         $OrderBodyObj = new stdClass;
         $OrderBodyObj->amount                 = number_format($order->get_total() , 2, '.', '');
         $OrderBodyObj->consumer               = new stdClass;
@@ -1317,6 +1308,63 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         $OrderBodyObj->merchantSystemInformation->active_plugin_modules = (string)$active_plugins;
 
         $APIURL = $this->orderurl . '/productSelect';
+
+        // Check if the current order already has a Payflex order ID
+        $existing_order_id = $order->get_meta('_payflex_order_id');
+
+        // Create an order note
+        if($existing_order_id)
+        {
+            $current_order_url = urlencode(admin_url('admin.php?page=wc-orders&action=edit&id=' . $order_id));
+            $admin_support_url = admin_url('admin.php?page=payflex-support&payflex_order_id=' . $existing_order_id.'&redirect_url='.$current_order_url);
+            $transaction_id_html_link =  '<a href="'.$admin_support_url.'">'.$existing_order_id.'</a>';
+
+            $order->add_order_note(__('Payflex: User checking out again using Payflex, but the order already transaction ID: ' . $transaction_id_html_link, 'woo_payflex'));
+
+            // Check payflex order transaction ID on Payflex
+            $payflex_order = $this->payflex_remote_get_order($existing_order_id);
+
+            if($payflex_order->orderStatus == 'Declined' OR $payflex_order->orderStatus == 'Abandoned' OR $payflex_order->orderStatus == 'Cancelled')
+            {
+                // If the order status is declined or abandoned, we can create a new order
+                $order->add_order_note(__('Payflex:  ' .$transaction_id_html_link . ' is was '.$payflex_order->orderStatus.'. Transaction ID resetting to allow a new payment for current order.', 'woo_payflex'));
+
+                $order->delete_meta_data('_payflex_order_id');
+                $order->delete_meta_data('_payflex_order_token');
+            }
+
+            if($payflex_order->orderStatus == 'Created')
+            {
+                // If the order status is created, we should not create a new order
+                $order->add_order_note(__('Payflex: Order is currently pending on Payflex. Until the Payflex order is declined or cancelled, the user cannot checkout again for the current order', 'woo_payflex'));
+                // Show a notice to the user
+                wc_add_notice(__('This order is currently awaiting approval from Payflex. Please wait for the order to be approved or cancelled before trying again.', 'woo_payflex'), 'error');
+
+                return;
+            }
+            if($payflex_order->orderStatus == 'Approved')
+            {
+                // If the order status is approved, we should not create a new order
+                $order->add_order_note(__('Payflex: Order was already approved on Payflex. Payment cannot be processed again', 'woo_payflex'));
+                $this->set_payflex_workflow_status($order_id, 'approved');
+
+                // Show a notice to the user
+                wc_add_notice(__('This order has already been approved by Payflex, if your order still appears to be pending, please wait for up to 40 minutes for the order to be processed.', 'woo_payflex'), 'error');
+
+                return;
+            }
+
+            if(!in_array($payflex_order->orderStatus, ['Declined', 'Abandoned','Cancelled','Created','Approved']))
+            {
+                // If the order status is not in the list of statuses that we want to check, we can create a new order
+                $order->add_order_note(__('Payflex: Order status is ' . $payflex_order->orderStatus . '. This isn\'t a known status, so we will not allow the user to checkout again using Payflex for the current order', 'woo_payflex'));
+                
+                // Show a notice to the user
+                wc_add_notice(__('This order is currently awaiting approval from Payflex. Please wait for the order to be approved or cancelled before trying again.', 'woo_payflex'), 'error');
+                return;
+            }
+        }
+
 
 
         $order_args = array(
@@ -1446,16 +1494,17 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         $this->log('Created Payflex OrderId: ' . print_r($order_body->orderId, true));
 
         # Use WC_Order method to save meta
-        $order->update_meta_data('_partpay_order_token', $order_body->token);
-        $order->update_meta_data('_partpay_order_id',    $order_body->orderId);
+        // $order->update_meta_data('_partpay_order_token', $order_body->token);
+        // $order->update_meta_data('_partpay_order_id',    $order_body->orderId);
         $order->update_meta_data('_order_redirectURL',   $order_body->redirectUrl);
 
         # Adding Payflex meta fields for future compatibility
         $order->update_meta_data('_payflex_order_token', $order_body->token);
         $order->update_meta_data('_payflex_order_id',    $order_body->orderId);
+        $order->update_meta_data('_payflex_environment', payflex_environment());
         $order->save();
 
-        $savedId = $order->get_meta('_partpay_order_id');
+        $savedId = $order->get_meta('_payflex_order_id');
 
         # Order Link
 
@@ -1465,14 +1514,23 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         
         # Add order note
         if($this->get_payflex_workflow_status($order_id) !== 'initiated')
-            $order->add_order_note(__('User attempted Payflex order.<br>Payflex order ID: ' . $order_id_url, 'woo_payflex'));
+        {
+            if(payflex_environment() == 'production')
+            {
+                $order->add_order_note(__('Payflex: User attempted Payflex order.<br>Transaction ID: ' . $order_id_url, 'woo_payflex'));
+            }
+            else
+            {
+                $order->add_order_note(__('Payflex: User attempted Payflex order in Sandbox Mode.<br>Transaction ID: ' . $order_id_url, 'woo_payflex'));
+            }
+        }
 
         $this->set_payflex_workflow_status($order_id, 'initiated');
 
         $this->log('Saved ' . $savedId . ' into post meta');
 
         $redirect = $order->get_checkout_payment_url(true);
-        $this->log('Redirect URL ' . json_encode($order->get_payment_method()));
+        $this->log('Redirect URL ' . json_encode($redirect));
         return array(
             'result'   => 'success',
             'redirect' => $redirect
@@ -1522,9 +1580,10 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if(isset($redirectURL[0]) && !empty($redirectURL[0])) $redirectURL_new = $redirectURL;
 
-        $this->log('Partpay Checkout URL ' .$redirectURL_new);
-        //Redirect to Partpay checkout
+        $this->log('Payflex Checkout URL ' .$redirectURL_new);
+        //Redirect to Payflex checkout
         header('Location: ' . $redirectURL_new);
+        exit;
     }
 
     /**
@@ -1600,7 +1659,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         
         if ($remote_order_status === 'Approved' AND !$order->has_status(['processing', 'completed']))
         {
-            $order_note = __('Payment approved.<br>Payflex order ID: <a href="#" >' . $order_id_url, 'woo_payflex');
+            $order_note = __('Payflex: Payment approved.<br>Transaction ID: <a href="#" >' . $order_id_url, 'woo_payflex');
 
             if($this->get_payflex_workflow_status($order_id) !== 'completed' )
             {
@@ -1608,7 +1667,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 $order->payment_complete($payflex_order_id);
             }
             else{
-                $order->add_order_note(__('Payflex payment already completed, user returned more than once. Order ID from Payflex: ' . $order_id_url, 'woo_payflex'));
+                $order->add_order_note(__('Payflex: Payment already completed, user returned more than once. Transaction ID: ' . $order_id_url, 'woo_payflex'));
             }
 
             $this->set_payflex_workflow_status($order_id, 'completed');
@@ -1626,7 +1685,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         if ($remote_order_status === 'Declined' AND !$order->has_status('failed'))
         {
-            $order_note = __('Payflex payment declined. Order ID from Payflex: ' . $order_id_url, 'woo_payflex');
+            $order_note = __('Payflex: Payment declined. Transaction ID: ' . $order_id_url, 'woo_payflex');
 
             if($this->get_payflex_workflow_status($order_id) !== 'failed')
                 $order->add_order_note($order_note);
@@ -1641,7 +1700,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         
         if ($remote_order_status === 'Abandoned' AND !$order->has_status('failed'))
         {
-            $order_note = __('Payflex payment abandoned. Order ID from Payflex: ' . $order_id_url . ' ', 'woo_payflex');
+            $order_note = __('Payflex: Payment abandoned. Transaction ID: ' . $order_id_url . ' ', 'woo_payflex');
 
             if($this->get_payflex_workflow_status($order_id) !== 'abandoned')
                 $order->add_order_note($order_note);
@@ -1724,7 +1783,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             ->total) ? $woocommerce
             ->cart->total : 0;
 
-        $access_token = $this->get_partpay_authorization_code();
+        $access_token = $this->get_payflex_authorization_code();
         $config_response_transistent = get_transient('payflex_configuration_response');
         $api_url = $this->configurationUrl;
         if (false !== $config_response_transistent && !empty($config_response_transistent))
@@ -1796,26 +1855,21 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         $this->log(sprintf('Attempting refund for order_id: %s', $order_id));
 
-        $partpay_order_id = $order->get_meta('_partpay_order_id');
-
-        if(empty($partpay_order_id))
-            $partpay_order_id = get_post_meta($order_id, '_partpay_order_id', true);
+        $payflex_order_id = $this->get_payflex_order_id($order_id);
         
-
-
-        $this->log(sprintf('Attempting refund for Payflex orderId: %s', $partpay_order_id));
+        $this->log(sprintf('Attempting refund for Payflex orderId: %s', $payflex_order_id));
 
         $order = new WC_Order($order_id);
 
-        if (empty($partpay_order_id))
+        if (empty($payflex_order_id))
         {
             $order->add_order_note(sprintf(__('There was an error submitting the refund to Payflex.', 'woo_payflex')));
             return false;
         }
 
-        $access_token = $this->get_partpay_authorization_code();
+        $access_token = $this->get_payflex_authorization_code();
         $random_string = wp_generate_password(8, false, false);
-        error_log('partpay orderId2' . $partpay_order_id);
+        error_log('partpay orderId2' . $payflex_order_id);
         $refund_args = array(
             'headers' => array(
                 'Content-Type' => 'application/json',
@@ -1827,14 +1881,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 'merchantRefundReference' => 'Order #' . $order_id . '-' . $random_string
             ))
         );
-        error_log('partpay orderId3' . $partpay_order_id);
-        $refundOrderUrl = $this->orderurl . '/' . $partpay_order_id . '/refund';
+        error_log('partpay orderId3' . $payflex_order_id);
+        $refundOrderUrl = $this->orderurl . '/' . $payflex_order_id . '/refund';
 
         $refund_response = wp_remote_post($refundOrderUrl, $refund_args);
         $refund_body = json_decode(wp_remote_retrieve_body($refund_response));
 
         $this->log('Refund body: ' . print_r($refund_body, true));
-        error_log('partpay orderId3' . $partpay_order_id);
+        error_log('partpay orderId3' . $payflex_order_id);
         $responsecode = isset($refund_response['response']['code']) ? intval($refund_response['response']['code']) : 0;
 
         if ($responsecode == 201 || $responsecode == 200) {
@@ -1943,28 +1997,24 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
             
             // Use wc meta function instead of get_post_meta
-            $partpay_order_id = $order->get_meta('_partpay_order_id');
-
-            // If the order meta is not found, try to get it from the post meta
-            if(!$partpay_order_id)
-                $partpay_order_id = get_post_meta($pending_order->get_id(), '_partpay_order_id', true);
+            $payflex_order_id = $this->get_payflex_order_id($pending_order->get_id());
             
             // $this->log(print_r($order, true));
             
             // Check if there's a stored order token. If not, it's not an PartPay order.
-            if (!$partpay_order_id)
+            if (!$payflex_order_id)
             {
                 $this->log('No Payflex OrderId for Order ' . $pending_order->get_id());
                 continue;
             }
             
-            $this->log($prefix.'Checking abandoned order for WC Order ID ' . $order->get_id() . ', Payflex ID ' . $partpay_order_id);
+            $this->log($prefix.'Checking abandoned order for WC Order ID ' . $order->get_id() . ', Payflex ID ' . $payflex_order_id);
 
 
             // Get the order status from Payflex
-            $response = wp_remote_get($this->orderurl . '/' . $partpay_order_id, array(
+            $response = wp_remote_get($this->orderurl . '/' . $payflex_order_id, array(
                 'headers' => array(
-                    'Authorization' => 'Bearer ' . $this->get_partpay_authorization_code() ,
+                    'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code() ,
                 )
             ));
             $body = json_decode(wp_remote_retrieve_body($response));
@@ -1975,27 +2025,27 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
             if ($response_code != 200)
             {
-                // $order->add_order_note(sprintf(__('Tried to check payment status with Payflex. Unable to access API. Repsonse code is %s Payflex Order ID: %s','woo_payflex'),$response_code,$partpay_order_id));
+                // $order->add_order_note(sprintf(__('Tried to check payment status with Payflex. Unable to access API. Repsonse code is %s Payflex Order ID: %s','woo_payflex'),$response_code,$payflex_order_id));
                 continue;
             }
 
             // Comment order url
             $current_order_url = urlencode(admin_url('admin.php?page=wc-orders&action=edit&id=' . $pending_order->get_id()));
 
-            $admin_support_url = admin_url('admin.php?page=payflex-support&payflex_order_id=' . $partpay_order_id.'&redirect_url='.$current_order_url);
-            $order_id_url = '<a href="'.$admin_support_url.'" >' . $partpay_order_id . '</a> ';
+            $admin_support_url = admin_url('admin.php?page=payflex-support&payflex_order_id=' . $payflex_order_id.'&redirect_url='.$current_order_url);
+            $order_id_url = '<a href="'.$admin_support_url.'" >' . $payflex_order_id . '</a> ';
 
-            $order_note = __('Payment processed via CRON.<br>Payflex Order ID: ' . $order_id_url, 'woo_payflex');
+            $order_note = __('Payflex: Payment processed via CRON.<br>Transaction ID: ' . $order_id_url, 'woo_payflex');
 
             if($body->orderStatus == "Initiated")
             {
-                $this->log('Order is Intiated by customer but not logged in with Payflex OrderId :: '. $partpay_order_id);
+                $this->log('Order is Intiated by customer but not logged in with Payflex OrderId :: '. $payflex_order_id);
                 continue;
             }
 
             if ($body->orderStatus == "Approved")
             {
-                $order_note = __('Payment Approved via CRON.<br>Payflex order ID: ' . $order_id_url, 'woo_payflex');
+                $order_note = __('Payflex: Payment approved via CRON.<br>Transaction ID: ' . $order_id_url, 'woo_payflex');
 
                 if(!$this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note))
                     $order->add_order_note($order_note);
@@ -2010,7 +2060,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             {
                 if ($settings['enable_order_notes'] == 'yes')
                 {   
-                    $order_note = sprintf(__('Checked payment status with Payflex. Still pending approval.', 'woo_payflex') , $partpay_order_id);
+                    $order_note = sprintf(__('Payflex: Checked payment status. Still pending approval.', 'woo_payflex') , $payflex_order_id);
 
                     if(!$this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note))
                         $order->add_order_note($order_note);
@@ -2024,24 +2074,28 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 $workflow_updated = FALSE;
                 $workflow_status = $this->get_payflex_workflow_status($pending_order->get_id());
 
-                if($workflow_status !== $body->orderStatus.'cron_checked') $workflow_updated = TRUE;
+                if($workflow_status !== $body->orderStatus.'_cron_checked') $workflow_updated = TRUE;
 
 
-                $order_note = __('Payment checked via CRON. Order '.$body->orderStatus.'.<br>Payflex order ID: ' . $order_id_url, 'woo_payflex');
+                $order_note = __('Payflex: Payment checked via CRON. Order '.$body->orderStatus.'.<br>Transaction ID: ' . $order_id_url, 'woo_payflex');
 
                 # Set order workflow status
                 if(!$workflow_updated)
                 {
-                    $this->set_payflex_workflow_status($pending_order->get_id(), $body->orderStatus.'cron_checked');
+                    $this->set_payflex_workflow_status($pending_order->get_id(), $body->orderStatus.'_cron_checked');
                 }
 
+                # If the workflow updated, we will update the order
+                if($workflow_updated)
+                {
+                    $isExist = $this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note);
 
-                $isExist = $this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note);
-
-                if(!$isExist AND $workflow_updated){
-                    $order->add_order_note($order_note);
+                    if(!$isExist AND $workflow_updated){
+                        $order->add_order_note($order_note);
+                    }
+                    $order->update_status('cancelled');
                 }
-                $order->update_status('cancelled');
+
                 continue;
             }
 
@@ -2337,7 +2391,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         $response = wp_remote_get($this->orderurl . '/' . $payflex_token, array(
             'headers' => array(
-                'Authorization' => 'Bearer ' . $this->get_partpay_authorization_code() ,
+                'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code() ,
             )
         ));
 
@@ -2370,7 +2424,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         $response = wp_remote_get($this->orderurl . '/' . $payflex_order_id, array(
             'headers' => array(
-                'Authorization' => 'Bearer ' . $this->get_partpay_authorization_code() ,
+                'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code() ,
             )
         ));
 

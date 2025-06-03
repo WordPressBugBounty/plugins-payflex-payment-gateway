@@ -3,9 +3,9 @@
 Contributors: tomlister, nmjbhoffmann, nathanjeffery
 Tags: payment gateway, woocommerce, buy now pay later
 Requires at least: 4.4
-Tested up to: 6.7.2
+Tested up to: 6.8.1
 Requires PHP: 7.4
-Stable tag: 2.6.5
+Stable tag: 2.6.7
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -118,3 +118,9 @@ That’s our problem. You get 100% of the purchase amount (less the Payflex fee)
 = 2.6.5 =
      * Added debug mode
      * Reduced logging output when debug mode is disabled
+= 2.6.6 =
+     * Fix: (Security) Extended checks on the checkout screen to prevent edge case duplicate checkout issues
+     * Fix: JS error on product page if widget is enabled, but the "Payflex Enabled" option is disabled, specifically on variable products
+     * Fix: Merchant reference will now always use the order number, not the order id (to prevent issues with custom order number plugins)
+     * Added: Implemented new logging/debugging methods
+     * Added: Admin only mode for testing

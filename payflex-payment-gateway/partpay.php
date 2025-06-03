@@ -2,11 +2,11 @@
 /*
  * Plugin Name: Payflex Payment Gateway
  * Description: Payflex payment gateway plugin for WooCommerce. Supports pay now as well as buy now pay later.
- * Version: 2.6.5
+ * Version: 2.6.6
  * Author: Payflex
  * Author URI: https://payflex.co.za/
  * WC requires at least: 6.0
- * WC tested up to: 9.3.3
+ * WC tested up to: 9.7.1
 */
 
 
@@ -103,14 +103,14 @@ add_action('template_redirect', function()
             $ordUrl = $obj->getOrderUrl();
             $response = wp_remote_get($ordUrl . '/' . $partpay_order_id, array(
                 'headers' => array(
-                    'Authorization' => 'Bearer ' . $obj->get_partpay_authorization_code() ,
+                    'Authorization' => 'Bearer ' . $obj->get_payflex_authorization_code() ,
                 )
             ));
             $body = json_decode(wp_remote_retrieve_body($response));
             if ($body->orderStatus != "Approved" OR $gateway->get_payflex_workflow_status($order_id) != 'abandoned')
             {
                 $gateway->log('Order ' . $order_id . ' payment cancelled by the customer while on the Payflex checkout pages.');
-                $order->add_order_note(__('Payment cancelled by the customer while on the Payflex checkout pages.', 'woo_payflex'));
+                $order->add_order_note(__('Payment cancelled by the customer while on the Payflex checkout page.', 'woo_payflex'));
 
                 $gateway->set_payflex_workflow_status($order_id, 'abandoned');
 
@@ -158,11 +158,15 @@ add_action('before_woocommerce_init', 'declare_cart_checkout_blocks_compatibilit
 // });
 
 // Hook the custom function to the 'woocommerce_blocks_loaded' action
+
 add_action( 'woocommerce_blocks_loaded', 'oawoo_register_order_approval_payment_method_type' );
 /**
  * Custom function to register a payment method type
  */
 function oawoo_register_order_approval_payment_method_type() {
+
+    if(!payflex_enabled()) return;
+
     // Check if the required class exists
     if ( ! class_exists( 'Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
         return;
@@ -271,10 +275,10 @@ add_filter('cron_schedules', function ($schedules)
 // FUNCTION - Frontend show on single product page
 function widget_content()
 {
-    $payflex_settings = get_option('woocommerce_payflex_settings');
-    if($payflex_settings['enable_product_widget'] == 'yes'){
-        echo woo_payflex_frontend_widget(); 
-    }
+    if(payflex_product_widget_enabled() == false) return;
+
+    echo woo_payflex_frontend_widget();
+
 }
 global $wp_version;
 if($wp_version >= 6.3){
@@ -286,10 +290,9 @@ if($wp_version >= 6.3){
 
 function widget_shortcode_content()
 {
-    $payflex_settings = get_option('woocommerce_payflex_settings');
-    // if($payflex_settings['is_using_page_builder'] == 'yes'){
-        return woo_payflex_frontend_widget();
-    // }
+
+    return woo_payflex_frontend_widget();
+
 }
 
 add_shortcode('payflex_widget', 'widget_shortcode_content');
@@ -376,6 +379,8 @@ add_action('enqueue_block_editor_assets', 'payflex_block_vars');
 
 // Register the block
 function register_payflex_widget_block() {
+    if(payflex_enabled() == false) return;
+
     wp_register_script(
         'payflex-widget-block',
         plugins_url('assets/block.js', __FILE__),
@@ -402,17 +407,70 @@ function render_payflex_widget_block($attributes) {
     return ob_get_clean();
 }
 
+function payflex_enabled()
+{
+    if(!function_exists('is_user_logged_in')) return false;
+    
+    $payflex_settings = get_option('woocommerce_payflex_settings');
+
+    if(isset($payflex_settings['enabled']) AND $payflex_settings['enabled'] == 'yes')
+    {
+        # Check if the user is logged in and if the admin only setting is enabled
+        if(is_user_logged_in() AND current_user_can('administrator')) return true;
+
+        if(isset($payflex_settings['admin_only_enabled']) AND $payflex_settings['admin_only_enabled'] != 'yes') return true;
+    }
+
+    return false;
+}
+
+function payflex_product_widget_enabled()
+{
+    if(payflex_enabled() == false) return false;
+
+    $payflex_settings = get_option('woocommerce_payflex_settings');
+
+    if($payflex_settings['enable_product_widget'] == 'yes') return true;
+
+    return false;
+}
+
+function payflex_checkout_widget_enabled()
+{
+    if(payflex_enabled() == false) return false;
+
+    $payflex_settings = get_option('woocommerce_payflex_settings');
+
+    if($payflex_settings['enable_checkout_widget'] == 'yes') return true;
+
+    return false;
+}
+
+function payflex_environment()
+{
+    $payflex_settings = get_option('woocommerce_payflex_settings');
+
+    if(isset($payflex_settings['environment']) AND $payflex_settings['environment'] == 'production')
+    {
+        return 'production';
+    }
+
+    return 'develop';
+}   
 
 // Variation price update
 add_action( 'woocommerce_after_single_product', 'payflex_update_price_on_variation' );
 function payflex_update_price_on_variation() {
     global $product;
 
+    # return if widget is disabled
+    if(payflex_product_widget_enabled() == false) return;
+
     $payflex = WC_Gateway_PartPay::instance();
 
     $debug_mode = $payflex->get_debug_mode();
 
-    if(!$product){ return; }
+    if(!$product) return;
 
         ?>
         <script>
