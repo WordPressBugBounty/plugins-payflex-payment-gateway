@@ -2,7 +2,7 @@
 /*
  * Plugin Name: Payflex Payment Gateway
  * Description: Payflex payment gateway plugin for WooCommerce. Supports pay now as well as buy now pay later.
- * Version: 2.6.6
+ * Version: 2.6.7
  * Author: Payflex
  * Author URI: https://payflex.co.za/
  * WC requires at least: 6.0
@@ -20,6 +20,31 @@ if (!function_exists('is_plugin_active') || !function_exists('is_plugin_active_f
 }
 $woocommerce_active = is_plugin_active('woocommerce/woocommerce.php') || is_plugin_active_for_network('woocommerce/woocommerce.php');
 if (!$woocommerce_active) return;
+
+
+/**
+ * Gets a Payflex option from the database, if none is provided, it returns all options.
+ */
+function get_payflex_option($option = FALSE)
+{
+    $payflex_settings = get_option('woocommerce_payflex_settings', array());
+    
+    if(!isset($payflex_settings) || !is_array($payflex_settings))
+    {
+        $payflex_settings = [];
+    }
+
+    if ($option)
+    {
+        if (isset($payflex_settings[$option]))
+        {
+            return $payflex_settings[$option];
+        }
+        return false;
+    }
+
+    return $payflex_settings;
+}
 
 /**
  * Add settings link on plugin page
@@ -303,7 +328,7 @@ function woo_payflex_frontend_widget($amount = false)
     global $product;
     if(!$product) return;
 
-    $payflex_settings = get_option('woocommerce_payflex_settings');
+    $payflex_settings = get_payflex_option();
 
     if ($product->get_type() === 'subscription') return;
 
@@ -356,9 +381,9 @@ function woo_payflex_frontend_widget($amount = false)
     $all_div_options = $widget_style_div.$theme_div.$pay_type_div;
     
     if($merchant_reference){
-        return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/'.$merchant_reference.'/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
+        return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/'.$merchant_reference.'/payflex-widget-2.0.1.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
     }
-    return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/payflex-widget-2.0.0.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
+    return '<div class="payflexCalculatorWidgetContainer" '.$all_div_options.'><script async src="https://widgets.payflex.co.za/payflex-widget-2.0.1.js?type=calculator'.$all_options.'" type="application/javascript"></script></div>';
 }
 
 // Register support page. This needs to be outside the class otherwise it won't be called soon enough
@@ -411,7 +436,7 @@ function payflex_enabled()
 {
     if(!function_exists('is_user_logged_in')) return false;
     
-    $payflex_settings = get_option('woocommerce_payflex_settings');
+    $payflex_settings = get_payflex_option();
 
     if(isset($payflex_settings['enabled']) AND $payflex_settings['enabled'] == 'yes')
     {
@@ -428,7 +453,7 @@ function payflex_product_widget_enabled()
 {
     if(payflex_enabled() == false) return false;
 
-    $payflex_settings = get_option('woocommerce_payflex_settings');
+    $payflex_settings = get_payflex_option();
 
     if($payflex_settings['enable_product_widget'] == 'yes') return true;
 
@@ -439,7 +464,7 @@ function payflex_checkout_widget_enabled()
 {
     if(payflex_enabled() == false) return false;
 
-    $payflex_settings = get_option('woocommerce_payflex_settings');
+    $payflex_settings = get_payflex_option();
 
     if($payflex_settings['enable_checkout_widget'] == 'yes') return true;
 
@@ -448,14 +473,18 @@ function payflex_checkout_widget_enabled()
 
 function payflex_environment()
 {
-    $payflex_settings = get_option('woocommerce_payflex_settings');
+    $payflex_settings = get_payflex_option();
 
-    if(isset($payflex_settings['environment']) AND $payflex_settings['environment'] == 'production')
+    if(isset($payflex_settings['testmode']))
     {
-        return 'production';
+        if(strtolower($payflex_settings['testmode']) == 'production')
+            return 'production';
+
+        if(strtolower($payflex_settings['testmode']) == 'develop')
+            return 'develop';
     }
 
-    return 'develop';
+    return 'unknown';
 }   
 
 // Variation price update

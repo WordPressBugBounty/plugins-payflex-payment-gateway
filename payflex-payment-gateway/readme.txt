@@ -3,7 +3,7 @@
 Contributors: tomlister, nmjbhoffmann, nathanjeffery
 Tags: payment gateway, woocommerce, buy now pay later
 Requires at least: 4.4
-Tested up to: 6.8.1
+Tested up to: 6.8.2
 Requires PHP: 7.4
 Stable tag: 2.6.7
 License: GPLv3
@@ -37,90 +37,127 @@ That’s our problem. You get 100% of the purchase amount (less the Payflex fee)
 
 == Changelog ==
 
-= 2.0 =
-    * Added latest logo of Payflex after rebranding
-    * Fixed error which is merchants are facing when they installing plugin first time 
 
-= 2.1 =
-     * Fixed Cron disable issue 
-= 2.2.0 =
-     * Updated plugin as per wordpress standard
-= 2.2.1 =
-     * Updated token expire time
-     * checkout page design update
-     * cron update
-     * added checkout widget admin configurable
-     * added product widget for page builder plugins
-= 2.2.2 =
-     * DIVI editor issue fix
- = 2.3.0 =
-     * Support for wordpress 5.9
-     * Stored configration value in transisnant
-= 2.3.1 =
-     * Fixd minor warnings
-= 2.3.2 =
-     * Fixd minor bug
-= 2.3.3 =
-     * Minor security fix
-= 2.3.4 =
-     * handled payment callback event for google analytics sales
-= 2.3.5 =
-     * Added support to multisite
-= 2.3.6 =
-     * Added Product widget based on diffrent product variant
-= 2.3.7 =
-     * Handled new order status Payment Intiated
-= 2.3.8 =
-     * Removed deprecated frunction and warnings
-= 2.3.9 =
-     * added support to woocommerce-sequential-order-numbers
-= 2.4.0 =
-     * Updated api request payload for payflex backend
-     * Plugin tested upto wordpress 6.1
-= 2.4.1 =
-     * minor bug fix
-= 2.4.2 =
-     * Added wp_get_active_network_plugins function if not found
-= 2.4.3 =
-     * Resolved Uncaught Error: Failed opening required 'config/config.php'
-= 2.4.4 =
-     * Fixd minor bug
-= 2.4.5 =
-     * Fixd minor bug
-= 2.4.6 =
-     * Fixd minor bug
-= 2.4.7 =
-     * Updated widget UI
-= 2.4.8 =
-     * Initialized $environments, $configurationUrl & $orderurl variables to elimiate possible deprication warning.
-     * Added alert when refund is disabled.
-     * Added conditions for wordpress 6.2 and 6.3 to display widget using different hooks.
-= 2.4.9 =
-     * Resolved "Your order can no longer be cancelled error" after cancelled the order and returned to merchant.       
-= 2.5.0 =
-     * Updated to use the Woocommerce High-Performance Order Storage function order updates
-= 2.6.0 =
-     * Security update - Added remote order checking on order update.
-     * Added CRON testing tools and Remote Order ID lookup.
-     * Minor changes to order notes
-= 2.6.1 =
-     * Fix for plugin assets
-= 2.6.2 =
-     * Fix to minor security issue
-     * Added variable product support to price widget
-     * Updates to support page to provide more information
-     * Added reset on save for client details to force refreshing of auth token
-     * Added block based checkout support
-= 2.6.3 =
-     * Added WooCommerce HPOS compatibilty flag
-= 2.6.4 =
-     * Updated widget to fix issues with certain themes
-= 2.6.5 =
-     * Added debug mode
-     * Reduced logging output when debug mode is disabled
+= 2.6.7 =
+     * Update: Widget version updated to remove dependency on JQuery to prevent conflicts
+     * Update: Changed the way settings are handled globally
+     * Fix: Implemented new settings default check to prevent issues with old installations where new settings weren't saved to the database 
+
 = 2.6.6 =
      * Fix: (Security) Extended checks on the checkout screen to prevent edge case duplicate checkout issues
      * Fix: JS error on product page if widget is enabled, but the "Payflex Enabled" option is disabled, specifically on variable products
      * Fix: Merchant reference will now always use the order number, not the order id (to prevent issues with custom order number plugins)
      * Added: Implemented new logging/debugging methods
      * Added: Admin only mode for testing
+
+= 2.6.5 =
+     * Added debug mode
+     * Reduced logging output when debug mode is disabled
+
+= 2.6.4 =
+     * Updated widget to fix issues with certain themes
+
+= 2.6.3 =
+     * Added WooCommerce HPOS compatibilty flag
+
+= 2.6.2 =
+     * Fix to minor security issue
+     * Added variable product support to price widget
+     * Updates to support page to provide more information
+     * Added reset on save for client details to force refreshing of auth token
+     * Added block based checkout support
+
+= 2.6.1 =
+     * Fix for plugin assets
+
+= 2.6.0 =
+     * Security update - Added remote order checking on order update.
+     * Added CRON testing tools and Remote Order ID lookup.
+     * Minor changes to order notes
+
+= 2.5.0 =
+     * Updated to use the Woocommerce High-Performance Order Storage function order updates
+
+= 2.4.9 =
+     * Resolved "Your order can no longer be cancelled error" after cancelled the order and returned to merchant.       
+
+= 2.4.8 =
+     * Initialized $environments, $configurationUrl & $orderurl variables to elimiate possible deprication warning.
+     * Added alert when refund is disabled.
+     * Added conditions for wordpress 6.2 and 6.3 to display widget using different hooks.
+
+= 2.4.7 =
+     * Updated widget UI
+
+= 2.4.6 =
+     * Fixd minor bug
+
+= 2.4.5 =
+     * Fixd minor bug
+
+= 2.4.4 =
+     * Fixd minor bug
+
+= 2.4.3 =
+     * Resolved Uncaught Error: Failed opening required 'config/config.php'
+
+= 2.4.2 =
+     * Added wp_get_active_network_plugins function if not found
+
+= 2.4.1 =
+     * minor bug fix
+
+= 2.4.0 =
+     * Updated api request payload for payflex backend
+     * Plugin tested upto wordpress 6.1
+
+= 2.3.9 =
+     * added support to woocommerce-sequential-order-numbers
+
+= 2.3.8 =
+     * Removed deprecated frunction and warnings
+
+= 2.3.7 =
+     * Handled new order status Payment Intiated
+
+= 2.3.6 =
+     * Added Product widget based on diffrent product variant
+
+= 2.3.5 =
+     * Added support to multisite
+
+= 2.3.4 =
+     * handled payment callback event for google analytics sales
+
+= 2.3.3 =
+     * Minor security fix
+
+= 2.3.2 =
+     * Fixd minor bug
+
+= 2.3.1 =
+     * Fixd minor warnings
+
+= 2.3.0 =
+     * Support for wordpress 5.9
+     * Stored configration value in transisnant
+
+= 2.2.2 =
+     * DIVI editor issue fix
+
+= 2.2.1 =
+     * Updated token expire time
+     * checkout page design update
+     * cron update
+     * added checkout widget admin configurable
+     * added product widget for page builder plugins
+
+= 2.2.0 =
+     * Updated plugin as per wordpress standard
+
+= 2.1 =
+     * Fixed Cron disable issue 
+
+= 2.0 =
+     * Added latest logo of Payflex after rebranding
+     * Fixed error which is merchants are facing when they installing plugin first time 
