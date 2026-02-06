@@ -13,7 +13,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     protected string $configurationUrl = '';
     protected string $orderurl = '';
 
-    private $version = '2.6.7';
+    private $version = '2.6.8';
 
     /**
         * @var $_instance WC_Gateway_PartPay The reference to the singleton instance of this class
@@ -178,6 +178,12 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         ));
 
     }
+
+    public function is_available()
+    {
+        return payflex_enabled();
+    }
+
     public function getOrderUrl(){
         return $this->orderurl;
     }
@@ -625,20 +631,20 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     {
         global $woocommerce;
 
-        if(!payflex_checkout_widget_enabled())
-        {
-            if ($this->settings['testmode'] != 'production'): ?><?php esc_html_e('TEST MODE ENABLED', 'woo_payflex'); ?><?php
-            endif;
-            $arr = array(
-                'br' => array() ,
-                'p' => array()
-            );
-            if ($this->description)
-            {
-                echo wp_kses('<p>' . $this->description . '</p>', $arr);
-            }
-            return;
-        }
+        if(!payflex_checkout_widget_enabled()) return;
+
+        // if ($this->settings['testmode'] != 'production'): ?><?php esc_html_e('TEST MODE ENABLED', 'woo_payflex'); ?><?php
+        // endif;
+        // $arr = array(
+        //     'br' => array() ,
+        //     'p' => array()
+        // );
+        // if ($this->description)
+        // {
+        //     echo wp_kses('<p>' . $this->description . '</p>', $arr);
+        // }
+        // return;
+
 
         echo '<style>.elementor{max-width:100% !important}';
         echo 'html {
