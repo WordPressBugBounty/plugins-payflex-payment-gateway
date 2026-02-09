@@ -13,7 +13,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     protected string $configurationUrl = '';
     protected string $orderurl = '';
 
-    private $version = '2.6.8';
+    private $version = '2.6.9';
 
     /**
         * @var $_instance WC_Gateway_PartPay The reference to the singleton instance of this class
@@ -591,6 +591,33 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             $this->admin_info_block();
     } // End admin_options()
     
+    /**
+     * Process admin options and sanitize credentials
+     *
+     * @since 2.6.8
+     */
+    public function process_admin_options()
+    {
+        // Get the posted data
+        $post_data = $this->get_post_data();
+
+        // Trim whitespace from client_id and client_secret before processing
+        if (isset($post_data['woocommerce_payflex_client_id']))
+        {
+            $post_data['woocommerce_payflex_client_id'] = trim($post_data['woocommerce_payflex_client_id']);
+            $_POST['woocommerce_payflex_client_id']     = $post_data['woocommerce_payflex_client_id'];
+        }
+        
+        if (isset($post_data['woocommerce_payflex_client_secret']))
+        {
+            $post_data['woocommerce_payflex_client_secret'] = trim($post_data['woocommerce_payflex_client_secret']);
+            $_POST['woocommerce_payflex_client_secret']     = $post_data['woocommerce_payflex_client_secret'];
+        }
+
+        // Call the parent method to handle the rest of the processing
+        return parent::process_admin_options();
+    }
+    
     public function on_save_settings()
     {
         # Reset the access token
@@ -632,19 +659,6 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         global $woocommerce;
 
         if(!payflex_checkout_widget_enabled()) return;
-
-        // if ($this->settings['testmode'] != 'production'): ?><?php esc_html_e('TEST MODE ENABLED', 'woo_payflex'); ?><?php
-        // endif;
-        // $arr = array(
-        //     'br' => array() ,
-        //     'p' => array()
-        // );
-        // if ($this->description)
-        // {
-        //     echo wp_kses('<p>' . $this->description . '</p>', $arr);
-        // }
-        // return;
-
 
         echo '<style>.elementor{max-width:100% !important}';
         echo 'html {
@@ -827,7 +841,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                     <tr>
                         <td>Payflex Plugin Version: </td>
                         <td>
-                            <span class="payflex_debug_success">v<?=$WC->version?></span>
+                            <span class="">v<?=$WC->version?></span>
                         </td>
                     </tr>
                     <tr>
@@ -860,6 +874,30 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                             <?php else:?>
                                 <span class="payflex_debug_error">WooCommerce v<?=WC()->version?> is seriously outdated, please update Woocommerce as soon as possible</span>
                             <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Payflex Limits:</td>
+                        <td>
+                            <?php 
+                            $limits = $WC->get_payflex_limits();
+                            if($limits['minimum'] !== false && $limits['maximum'] !== false): 
+                            ?>
+                                <span class="payflex_debug_success">
+                                    Min: R<?=number_format($limits['minimum'], 2)?> | Max: R<?=number_format($limits['maximum'], 2)?>
+                                </span>
+                                <?php if($limits['refunds_enabled']): ?>
+                                    <span class="payflex_debug_success">(Refunds Enabled)</span>
+                                <?php else: ?>
+                                    <span class="payflex_debug_warning">(Refunds Disabled)</span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="payflex_debug_error">Limits not available</span>
+                            <?php endif; ?>
+                            <div class="payflex_info_text">
+                                These are the Payflex limits set for your account <br>
+                                Payflex will not be available as a payment option if the cart total is outside of these limits.
+                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -1200,20 +1238,53 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             $body = json_decode(wp_remote_retrieve_body($response) , true);
 
 
-            // $this->log('Updating payment limits response: ' . print_r($body, true));
+            // Remove old limits
+            if(isset($settings['payflex-amount-maximum'])) unset($settings['payflex-amount-maximum']);
+            if(isset($settings['payflex-amount-minimum'])) unset($settings['payflex-amount-minimum']);
 
             if (!is_wp_error($response) && isset($response['response']['code']) && $response['response']['code'] == 200)
             {
                 if($this->get_debug_mode()) $this->log('Updating payment limits');
                 
-                $settings['payflex-amount-minimum'] = isset($body['minimumAmount']) ? $body['minimumAmount'] : 0;
-                $settings['payflex-amount-maximum'] = isset($body['maximumAmount']) ? $body['maximumAmount'] : 0;
+                $settings['payflex_limit_amount_minimum']  = isset($body['minimumAmount']) ? $body['minimumAmount'] : 0;
+                $settings['payflex_limit_amount_maximum']  = isset($body['maximumAmount']) ? $body['maximumAmount'] : 0;
+                $settings['payflex_limit_refunds_enabled'] = isset($body['enabledForRefunds']) ? $body['enabledForRefunds'] : false;
+
+                $settings['payflex_limit_last_updated'] = time();
             }
 
             update_option('woocommerce_payflex_settings', $settings);
         }
         $this->init_settings();
 
+    }
+
+
+    /**
+     * Get Payflex payment limits
+     * @param bool $field Specific field to return (amount_minimum, amount_maximum, refunds_enabled)
+     * @return array|bool
+     */
+    public function get_payflex_limits($field = false)
+    {
+        if (!isset($settings['payflex_limit_last_updated']) || (time() - $settings['payflex_limit_last_updated']) > 86400) {
+            $this->update_payment_limits();
+        }
+
+        $settings = get_payflex_option();
+
+        if($field)
+        {
+            return isset($settings['payflex_limit_'.$field]) ? $settings['payflex_limit_'.$field] : false;
+        }
+        else
+        {
+            return [
+                'minimum'         => isset($settings['payflex_limit_amount_minimum']) ? $settings['payflex_limit_amount_minimum'] : false,
+                'maximum'         => isset($settings['payflex_limit_amount_maximum']) ? $settings['payflex_limit_amount_maximum'] : false,
+                'refunds_enabled' => isset($settings['payflex_limit_refunds_enabled']) ? $settings['payflex_limit_refunds_enabled'] : false,
+            ];
+        }
     }
 
     /**
@@ -1932,26 +2003,27 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         $access_token = $this->get_payflex_authorization_code();
         $random_string = wp_generate_password(8, false, false);
-        error_log('partpay orderId2' . $payflex_order_id);
-        $refund_args = array(
-            'headers' => array(
-                'Content-Type' => 'application/json',
+        error_log('Payflex: orderId2' . $payflex_order_id);
+        $refund_args = [
+            'headers' => [
+                'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $access_token
-            ) ,
-            'body' => json_encode(array(
-                'requestId' => 'Order #' . $order_id . '-' . $random_string,
-                'amount' => $amount,
+            ] ,
+            'body' => json_encode([
+                'requestId'               => 'Order #' . $order_id . '-' . $random_string,
+                'amount'                  => $amount,
+                'isPlugin'                => true,
                 'merchantRefundReference' => 'Order #' . $order_id . '-' . $random_string
-            ))
-        );
-        error_log('partpay orderId3' . $payflex_order_id);
+            ])
+        ];
+        error_log('Payflex: orderId3' . $payflex_order_id);
         $refundOrderUrl = $this->orderurl . '/' . $payflex_order_id . '/refund';
 
         $refund_response = wp_remote_post($refundOrderUrl, $refund_args);
         $refund_body = json_decode(wp_remote_retrieve_body($refund_response));
 
         $this->log('Refund body: ' . print_r($refund_body, true));
-        error_log('partpay orderId3' . $payflex_order_id);
+        error_log('Payflex: orderId3' . $payflex_order_id);
         $responsecode = isset($refund_response['response']['code']) ? intval($refund_response['response']['code']) : 0;
 
         if ($responsecode == 201 || $responsecode == 200) {
@@ -2058,16 +2130,17 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             if (!function_exists("wc_get_order"))
                 $order = new WC_Order($pending_order->get_id());
 
-            
+            $order_id = $order->get_id();
+
             // Use wc meta function instead of get_post_meta
-            $payflex_order_id = $this->get_payflex_order_id($pending_order->get_id());
+            $payflex_order_id = $this->get_payflex_order_id($order_id);
             
             // $this->log(print_r($order, true));
             
             // Check if there's a stored order token. If not, it's not an PartPay order.
             if (!$payflex_order_id)
             {
-                $this->log('No Payflex OrderId for Order ' . $pending_order->get_id());
+                $this->log('No Payflex OrderId for Order ' . $order_id);
                 continue;
             }
             
@@ -2093,7 +2166,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             }
 
             // Comment order url
-            $current_order_url = urlencode(admin_url('admin.php?page=wc-orders&action=edit&id=' . $pending_order->get_id()));
+            $current_order_url = urlencode(admin_url('admin.php?page=wc-orders&action=edit&id=' . $order_id));
 
             $admin_support_url = admin_url('admin.php?page=payflex-support&payflex_order_id=' . $payflex_order_id.'&redirect_url='.$current_order_url);
             $order_id_url = '<a href="'.$admin_support_url.'" >' . $payflex_order_id . '</a> ';
@@ -2102,7 +2175,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
             # Get workflow status
             $workflow_updated = FALSE;
-            $workflow_status  = $this->get_payflex_workflow_status($pending_order->get_id());
+            $workflow_status  = $this->get_payflex_workflow_status($order_id);
 
             if($body->orderStatus == "Initiated")
             {
@@ -2113,13 +2186,16 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             if ($body->orderStatus == "Approved")
             {
                 $order_note = __('Payflex: Payment approved via CRON.<br>Transaction ID: ' . $order_id_url, 'woo_payflex');
+                if($workflow_status !== 'completed') $workflow_updated = TRUE;
 
-                if(!$this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note))
+                if($workflow_updated)
+                {
                     $order->add_order_note($order_note);
-                
-                $order->payment_complete($pending_order->get_id());
+                    $order->payment_complete($order_id);
+                }
+
                 # Update meta status
-                $this->set_payflex_workflow_status($pending_order->get_id(), 'completed');
+                $this->set_payflex_workflow_status($order_id, 'completed');
                 continue;
             }
 
@@ -2130,7 +2206,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
                 $order_note = sprintf(__('Payflex: Checked payment status via CRON. Still pending approval.', 'woo_payflex') , $payflex_order_id);
                 if($workflow_updated) $order->add_order_note($order_note);
 
-                $this->set_payflex_workflow_status($pending_order->get_id(), $body->orderStatus.'_cron_checked');
+                $this->set_payflex_workflow_status($order_id, $body->orderStatus.'_cron_checked');
                 continue;
             }
 
@@ -2141,27 +2217,24 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
                 $order_note = __('Payflex: Payment checked via CRON. Order '.$body->orderStatus.'.<br>Transaction ID: ' . $order_id_url, 'woo_payflex');
 
-                # Set order workflow status
-                if(!$workflow_updated)
-                {
-                    $this->set_payflex_workflow_status($pending_order->get_id(), $body->orderStatus.'_cron_checked');
-                }
-
                 # If the workflow updated, we will update the order
                 if($workflow_updated)
                 {
-                    $isExist = $this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note);
+                    $isExist = $this->checkOrderNotesExistsByOrderId($order_id, $order_note);
 
-                    if(!$isExist AND $workflow_updated){
+                    if(!$isExist){
                         $order->add_order_note($order_note);
                     }
                     $order->update_status('cancelled');
                 }
 
+                # Set order workflow status (always update after processing)
+                $this->set_payflex_workflow_status($order_id, $body->orderStatus.'_cron_checked');
+
                 continue;
             }
 
-            if(!$this->checkOrderNotesExistsByOrderId($pending_order->get_id(), $order_note))
+            if(!$this->checkOrderNotesExistsByOrderId($order_id, $order_note))
                 $order->add_order_note($order_note);
 
             # We will continue to update the order, but not update the order notes
