@@ -2,18 +2,21 @@
 
 use Automattic\WooCommerce\Internal\Admin\Logging\Settings as WC_Settings;
 
+require_once __DIR__ . '/trait-wc-gateway-payflex-form-fields.php';
+
 /**
  * Payflex Payment Gateway
- * 
+ *
  * Creates the Payflex Payment Gateway for WooCommerce.
  */
 class WC_Gateway_PartPay extends WC_Payment_Gateway
 {
+    use WC_Gateway_Payflex_Form_Fields;
     protected array  $environments = [];
     protected string $configurationUrl = '';
     protected string $orderurl = '';
 
-    private $version = '2.6.9';
+    private $version = '2.7.0';
 
     /**
         * @var $_instance WC_Gateway_PartPay The reference to the singleton instance of this class
@@ -221,305 +224,6 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
     /**
      * Gets a list of form fields for the payment gateway.
      */
-    public function form_fields()
-    {
-        $payflex_api_accessable   = ($this->get_payflex_authorization_code() !== false);
-
-        $pf_connection_status     = ($payflex_api_accessable) ? 'Successfully connected' : 'Connection failed, please check your credentials';
-
-        $pf_connection_status_class = ($payflex_api_accessable) ? 'payflex_debug_success' : 'payflex_debug_error';
-        
-        $env_values = array();
-        foreach ($this->environments as $key => $item)
-        {
-            $env_values[$key] = $item["name"];
-        }
-
-        $widget_types = [
-            'purple' => 'Purple',
-            'navy'   => 'Navy',
-        ];
-
-        $widget_themes =[ 
-            ''     => 'Default',
-            'dark' => 'Dark',
-        ];
-        $pay_type = [
-            '4' => 'Pay in 4',
-            '3' => 'Pay in 3'
-        ];
-
-        $pf_merch_value       = 'your-merchant-name';
-        $pf_merch_ref_example = 'https://widgets.payflex.co.za/<span class="pf-merch-value">'.$pf_merch_value.'</span>/payflex-widget-2.0.1.js?type=calculator';
-
-        $pf_merch_ref_example = 'https://widgets.payflex.co.za/<span class="pf-merch-value">'.get_payflex_option('merchant_widget_reference').'</span>/payflex-widget-2.0.1.js?type=calculator';
-
-        $this->form_fields = [
-            'enabled' => [
-                'title'   => __('Enable/Disable', 'woo_payflex'),
-                'type'    => 'checkbox',
-                'label'   => __('Enable Payflex', 'woo_payflex'),
-                'default' => 'yes'
-            ],
-            'title' => [
-                'title'       => __('Title', 'woo_payflex'),
-                'type'        => 'text',
-                'description' => __('This controls the payment method title which the user sees during checkout.', 'woo_payflex'),
-                'default'     => __('Payflex', 'woo_payflex')
-            ],
-            'testmode' => [
-                'title'       => __('Environment', 'woo_payflex'),
-                'type'        => 'select',
-                'options'     => $env_values,
-                'description' => __('Select which environment to use, Sandbox or Production.', 'woo_payflex'),
-            ],
-            'client_id' => [
-                'title'       => __('Client ID', 'woo_payflex'),
-                'type'        => 'text',
-                'description' => __('Payflex Client ID credential <br/><span class="pfConnectionStatus '.$pf_connection_status_class.'">'.$pf_connection_status.'</span>', 'woo_payflex'),
-                'default'     => __('', 'woo_payflex')
-            ],
-            'client_secret' => [
-                'title'       => __('Client Secret', 'woo_payflex'),
-                'type'        => 'text',
-                'description' => __('Payflex Client Secret credential', 'woo_payflex'),
-                'default'     => __('', 'woo_payflex')
-            ],
-            'widget_style' => [
-                'title'       => __('Widget Style', 'woo_payflex') ,
-                'type'        => 'select',
-                'options'     => $widget_types,
-                'description' => __('Select the widget style to use on the product page.', 'woo_payflex') ,
-                'default'     => 'purple'
-            ],
-            'widget_theme' => [
-                'title'       => __('Widget Theme', 'woo_payflex') ,
-                'type'        => 'select',
-                'options'     => $widget_themes,
-                'description' => __('Select the widget theme', 'woo_payflex') ,
-                'default'     => ''
-            ],
-            'pay_type' => [
-                'title'       => __('Pay Months', 'woo_payflex') ,
-                'type'        => 'select',
-                'options'     => $pay_type,
-                'description' => __('Select the number of months to pay.<br/><br/>Preview: <br/><span class="pfwidgetpreview"></span>', 'woo_payflex') ,
-                'default'     => '4'
-            ],
-            'enable_product_widget' => [
-                'title'   => __('Product Page Widget', 'woo_payflex'),
-                'type'    => 'checkbox',
-                'label'   => __('Enable Product Page Widget', 'woo_payflex'),
-                'default' => 'yes',
-
-            ],
-            'enable_checkout_widget' => [
-                'title'   => __('Checkout Page Widget', 'woo_payflex'),
-                'type'    => 'checkbox',
-                'label'   => __('Enable Checkout Page Widget', 'woo_payflex'),
-                'default' => 'yes'
-            ],
-            'merchant_widget_reference' => [
-                'title'       => __('Widget Reference', 'woo_payflex'),
-                'type'        => 'text',
-                'label'       => __('Widget Reference', 'woo_payflex'),
-                'default'     => __('', 'woo_payflex'),
-                'description' => __('This is an optional reference that will be used to identify the widget on Payflex. <br/>Example: <span class="pf_merchant_ref_example">'.$pf_merch_ref_example.'</span><br/><br/>Info: <a href="https://widgets.payflex.co.za/index-2.html" target="_blank">https://widgets.payflex.co.za/index-2.html</a>', 'woo_payflex')
-            ],
-            'admin_only_enabled' => [
-                'title'       => __('Admin Only Mode', 'woo_payflex'),
-                'type'        => 'checkbox',
-                'label'       => __('Enable Admin Only Mode', 'woo_payflex'),
-                'default'     => 'no',
-                'description' => __('Only enable Payflex when the user is logged into the Wordpress Backend.<br/>"Enable Payflex" will need to be selected as well.', 'woo_payflex')
-            ],
-            // Debug Mode
-            'payflex_debug' => [
-                'title'       => __('Debug Output', 'woo_payflex'),
-                'type'        => 'checkbox',
-                'label'       => __('Enable Debug Output', 'woo_payflex'),
-                'default'     => 'no',
-                'description' => __('Enable debug messages. Note this is not intended to be enabled day to day and should only be enabled during testing', 'woo_payflex')
-            ],
-
-        ];
-
-        return $this->form_fields;
-    }
-
-    /**
-     * Checks if the form fields match saved options, if not, return which fields are invalid
-     */
-    public function form_field_check()
-    {
-        // Get the saved options
-        $saved_options_full = get_payflex_option();
-        $saved_options      = array_keys($saved_options_full);
-
-        // Get form fields
-        $form_fields_full = $this->form_fields();
-        $saved_fields     = array_keys($form_fields_full);
-        
-        $missing_fields = [];
-
-        foreach ($saved_fields as $value)
-        {
-            if (!in_array($value, $saved_options))
-            {
-                $missing_fields[] = $value;
-            }
-        }
-
-        return $missing_fields;
-    }
-
-    /**
-        * Initialise Gateway Settings Form Fields
-        *
-        * @since 1.0.0
-        */
-    public function init_form_fields()
-    {
-        // Load the form fields.
-        $this->form_fields();
-
-        // Add script to settings page
-        add_action('admin_footer', array(
-            $this,
-            'add_script_to_settings_page'
-        ));
-    } // End init_form_fields()
-    
-    public function add_script_to_settings_page()
-    {
-        ?>
-        <script>
-            // Make sure the pf_merchant_ref_example value that's used is url safe
-            jQuery(document).on('keyup', '#woocommerce_payflex_merchant_widget_reference', function(){
-                var pfinputmerchref = jQuery(this).val();
-
-                // Can have any value that's safe in a url, including hyphens and underscores. If a space is used, replace it with a hyphen
-                pfinputmerchref = pfinputmerchref.replace(/ /g, '-');
-                
-                // Make sure there's only ever one hyphen in a row
-                pfinputmerchref = pfinputmerchref.replace(/-+/g, '-');
-
-                // Remove special characters and anything else that's not a letter, number, hyphen or underscore
-
-                pfinputmerchref = pfinputmerchref.replace(/[^a-zA-Z0-9-_]/g, '');
-
-                jQuery(this).val(pfinputmerchref);
-
-                var pfmerchstringvalue = jQuery(this).val();
-
-                if(pfmerchstringvalue == ''){
-                    pfmerchstringvalue = 'your-merchant-name';
-                }
-
-                jQuery('.pf-merch-value').text(pfmerchstringvalue);
-                
-            });
-
-            jQuery(document).ready(function($){
-                $('.pf_merchant_ref_example').css('color', '#0073aa');
-            });
-
-            // Dynamicaly load the widget into pfwidgetpreview
-            jQuery(document).on('change', '#woocommerce_payflex_widget_style , #woocommerce_payflex_widget_theme, #woocommerce_payflex_pay_type', function(){
-                var widget_style       = jQuery('#woocommerce_payflex_widget_style').val();
-                var widget_theme       = jQuery('#woocommerce_payflex_widget_theme').val();
-                var pay_type           = jQuery('#woocommerce_payflex_pay_type').val();
-                var widget_preview     = jQuery('.pfwidgetpreview');
-                if(widget_theme == ''){
-                    widget_preview.removeClass('dark');
-                }else{
-                    widget_preview.addClass('dark');
-                }
-                var widget_preview_url = 'https://widgets.payflex.co.za/your-merchant-name/payflex-widget-2.0.1.js?type=calculator&amount=1000&logo_type=' + widget_style + '&theme=' + widget_theme + '&pay_type=' + pay_type;
-                widget_preview.html('<script src="' + widget_preview_url + '"><\/script>');
-            });
-
-            // Load widget on page load
-            jQuery(document).ready(function(){
-                var widget_style       = jQuery('#woocommerce_payflex_widget_style').val();
-                var widget_theme       = jQuery('#woocommerce_payflex_widget_theme').val();
-                var pay_type           = jQuery('#woocommerce_payflex_pay_type').val();
-                var widget_preview     = jQuery('.pfwidgetpreview');
-                if(widget_theme == ''){
-                    widget_preview.removeClass('dark');
-                }else{
-                    widget_preview.addClass('dark');
-                }
-                var widget_preview_url = 'https://widgets.payflex.co.za/your-merchant-name/payflex-widget-2.0.1.js?type=calculator&amount=1000&logo_type=' + widget_style + '&theme=' + widget_theme + '&pay_type=' + pay_type;
-                widget_preview.html('<script src="' + widget_preview_url + '"><\/script>');
-            });
-
-            // pfConnectionStatus, when Client ID or secret is entered, update the text to tell you to save settings
-            jQuery(document).on('keyup', '#woocommerce_payflex_client_id, #woocommerce_payflex_client_secret', function(){
-                jQuery('.pfConnectionStatus').text('Save settings to attempt authentication');
-                jQuery('.pfConnectionStatus').removeClass('payflex_debug_success');
-                jQuery('.pfConnectionStatus').removeClass('payflex_debug_error');
-            });
-        </script>
-
-        <style>
-            .pf_merchant_ref_example{
-                font-size: 12px;
-                background-color: #fff;
-                padding: 2px;
-                border-radius: 4px;
-            }
-
-            /* Make the table look nice */
-            .payflex-support-settings-table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            .payflex-support-settings-table th {
-                padding: 10px;
-                text-align: left;
-                border-bottom: 1px solid #e5e5e5;
-                
-            }
-            .payflex-support-settings-table td {
-                padding: 10px;
-                border-bottom: 1px solid #e5e5e5;
-            }
-            .payflex-support-settings-table tr:last-child td {
-                border-bottom: none;
-            }
-            .payflex-support-settings-table tr:last-child th {
-                border-bottom: none;
-            }
-            .pfwidgetpreview{
-                max-width: 800px;
-                display: block;
-                /* resizable */
-                resize: horizontal;
-                overflow: auto;
-                border: 1px solid #e5e5e5;
-            }
-            .pfwidgetpreview.dark{
-                background-color: #333;
-                color: #fff;
-            }
-
-            .pfConnectionStatus{
-                font-size: 12px;
-                color: #0073aa;
-            }
-
-            .payflex_debug_success{
-                color: #46b450;
-            }
-            .payflex_debug_error{
-                color: #ff0000;
-            }
-
-        </style>
-        <?php
-    }
-
     /**
         * Init JS Scripts Options
         *
@@ -574,22 +278,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         */
     public function admin_options()
     {
-    ?>
+        ?>
         <h3><?php esc_html_e('Payflex Gateway', 'woo_payflex'); ?></h3>
-
-        <table class="form-table payflex-support-settings-table">
-            <?php
-        // Generate the HTML For the settings form.
-        $this->generate_settings_html();
-
-
-    ?>
-        </table><!--/.form-table-->
-
+        <div class="pf-settings-wrap">
+            <?php $this->generate_settings_html(); ?>
+        </div>
         <?php
-
-            $this->admin_info_block();
-    } // End admin_options()
+        $this->admin_info_block();
+    }
     
     /**
      * Process admin options and sanitize credentials
@@ -1318,66 +1014,46 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         //Process here
         $orderitems = $order->get_items();
-        $items = array();
+        $objectItems = array();
         $i = 0;
         if (count($orderitems))
         {
             foreach ($orderitems as $item)
             {
+                $qty = (int)$item->get_quantity();
+                if ($qty <= 0) continue;
 
                 $i++;
-                // get SKU
-                if ($item['variation_id'])
-                {
 
+                if ($item->get_variation_id())
+                {
                     if (function_exists("wc_get_product"))
                     {
-                        $product = wc_get_product($item['variation_id']);
+                        $product = wc_get_product($item->get_variation_id());
                     }
                     else
                     {
-                        $product = new WC_Product($item['variation_id']);
+                        $product = new WC_Product($item->get_variation_id());
                     }
                 }
                 else
                 {
-
                     if (function_exists("wc_get_product"))
                     {
-                        $product = wc_get_product($item['product_id']);
+                        $product = wc_get_product($item->get_product_id());
                     }
                     else
                     {
-                        $product = new WC_Product($item['product_id']);
+                        $product = new WC_Product($item->get_product_id());
                     }
                 }
 
-                if ($i == count($orderitems))
-                {
-                    $product = $items[] = array(
-
-                        '{
-                            "name":"' . esc_html($item['name']) . $i . '",
-                            "sku":"' . $product->get_sku() . '",
-                            "quantity":"' . $item['qty'] . '",
-                            "price":"' . number_format(($item['line_subtotal'] / $item['qty']) , 2, '.', '') . '"
-                        }'
-
-                    );
-                }
-                else
-                {
-                    $product = $items[] = array(
-
-                        '{
-                            "name":"' . esc_html($item['name']) . $i . '",
-                            "sku":"' . $product->get_sku() . '",
-                            "quantity":"' . $item['qty'] . '",
-                            "price":"' . number_format(($item['line_subtotal'] / $item['qty']) , 2, '.', '') . '"
-                        }'
-
-                    );
-                }
+                $objectItems[] = array(
+                    'name'     => esc_html($item['name']) . $i,
+                    'sku'      => $product->get_sku(),
+                    'quantity' => (string)$qty,
+                    'price'    => number_format($item['line_subtotal'] / $qty, 2, '.', ''),
+                );
             }
         }
 
@@ -1412,14 +1088,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
         $OrderBodyObj->shipping->suburb       = (string)$order->get_shipping_city();
         $OrderBodyObj->shipping->postcode     = (string)$order->get_shipping_postcode();
         $OrderBodyObj->description            = 'string';
-        $OrderBodyObj->items                  = [];
-        $objectItems                          = [];
-        foreach ($items as $item)
-        {
-            array_push($objectItems,json_decode($item[0]));
-        }
-
-        $OrderBodyObj->items                        = $objectItems;
+        $OrderBodyObj->items                  = $objectItems;
         $OrderBodyObj->merchant                     = new stdClass;
         $OrderBodyObj->merchant->redirectConfirmUrl = (string)$this->get_return_url($order) . '&order_id=' . $order_id . '&status=confirmed&wc-api=WC_Gateway_PartPay';
         $OrderBodyObj->merchant->redirectCancelUrl  = (string)$this->get_return_url($order) . '&status=cancelled';
@@ -1459,6 +1128,14 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
             // Check payflex order transaction ID on Payflex
             $payflex_order = $this->payflex_remote_get_order($existing_order_id);
 
+            if ($payflex_order === false)
+            {
+                $order->add_order_note(__('Payflex: Unable to verify the status of existing transaction ' . $existing_order_id . ' - API did not return a valid response.', 'woo_payflex'));
+                wc_add_notice(__('Unable to verify your existing Payflex transaction. Please try again later.', 'woo_payflex'), 'error');
+                return;
+            }
+
+
             if($payflex_order->orderStatus == 'Declined' OR $payflex_order->orderStatus == 'Abandoned' OR $payflex_order->orderStatus == 'Cancelled')
             {
                 // If the order status is declined or abandoned, we can create a new order
@@ -1477,6 +1154,7 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
                 return;
             }
+            
             if($payflex_order->orderStatus == 'Approved')
             {
                 // If the order status is approved, we should not create a new order
@@ -1663,11 +1341,10 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
         $this->log('Saved ' . $savedId . ' into post meta');
 
-        $redirect = $order->get_checkout_payment_url(true);
-        $this->log('Redirect URL ' . json_encode($redirect));
+        $this->log('Redirect URL ' . json_encode($order_body->redirectUrl));
         return array(
             'result'   => 'success',
-            'redirect' => $redirect
+            'redirect' => $order_body->redirectUrl
         );
 
     }
@@ -1910,51 +1587,30 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
      */
     public function check_cart_within_limits($gateways)
     {
-
         global $woocommerce;
-        $total = isset($woocommerce
-            ->cart
-            ->total) ? $woocommerce
-            ->cart->total : 0;
+        $total = isset($woocommerce->cart->total) ? $woocommerce->cart->total : 0;
 
-        $access_token = $this->get_payflex_authorization_code();
-        $config_response_transistent = get_transient('payflex_configuration_response');
-        $api_url = $this->configurationUrl;
-        if (false !== $config_response_transistent && !empty($config_response_transistent))
-        {
-            $order_response = $config_response_transistent;
-            $order_body = json_decode($order_response);
+        $limits = $this->get_payflex_limits();
+
+        // Make sure limits are set variables
+        if (!isset($limits['minimum']) || !isset($limits['maximum'])) {
+            return $gateways;
         }
-        else
-        {
 
-            $order_args = array(
-                'method' => 'GET',
-                'headers' => array(
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer ' . $access_token
-                ) ,
-                'timeout' => 30
-            );
-            $order_response = wp_remote_post($api_url, $order_args);
-            $order_response = wp_remote_retrieve_body($order_response);
-            $order_body = json_decode($order_response);
-            set_transient('payflex_configuration_response', $order_response, 86400);
+        // If we don't have a min or max amount, something is wrong.
+        if ($limits['minimum'] === false || $limits['maximum'] === false)
+        {
+            return $gateways;
         }
-        if ($order_response)
+
+        $pbi = ($total >= $limits['minimum'] && $total <= $limits['maximum']);
+
+        if (!$pbi)
         {
-
-            $pbi = ($total >= $order_body->minimumAmount && $total <= $order_body->maximumAmount);
-
-            if (!$pbi)
-            {
-                unset($gateways['partpay']);
-            }
-
+            unset($gateways['payflex']);
         }
 
         return $gateways;
-
     }
 
     /**
@@ -2551,19 +2207,24 @@ class WC_Gateway_PartPay extends WC_Payment_Gateway
 
     public function payflex_remote_get_order($payflex_order_id)
     {
-        // sanitize the order id
         $payflex_order_id = sanitize_text_field($payflex_order_id);
 
-        if(!$payflex_order_id)
+        if (!$payflex_order_id)
             return false;
 
         $response = wp_remote_get($this->orderurl . '/' . $payflex_order_id, array(
             'headers' => array(
-                'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code() ,
+                'Authorization' => 'Bearer ' . $this->get_payflex_authorization_code(),
             )
         ));
 
+        if (is_wp_error($response))
+            return false;
+
         $body = json_decode(wp_remote_retrieve_body($response));
+
+        if (!is_object($body) || !isset($body->orderStatus))
+            return false;
 
         return $body;
     }
